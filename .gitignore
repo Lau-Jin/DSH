@@ -1,3 +1,6 @@
 *.log
 .DS_Store
 Thumbs.db
+
+# 已拆到独立仓库 Lau-Jin/our-free-model，防止将来又被误提交进 main
+packages/our-free-model/
