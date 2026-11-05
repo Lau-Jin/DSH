@@ -1,0 +1,4 @@
+- insert:
+    - id: gongsi-tickets-panel
+      name: '@local/gongsi-tickets-panel'
+      config: {}

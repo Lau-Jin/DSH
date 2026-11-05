@@ -1,0 +1,11 @@
+node_modules/*
+!node_modules/@deepseek-ai
+!node_modules/@standard-schema
+node_modules/@deepseek-ai/*
+!node_modules/@deepseek-ai/cosmokit
+!node_modules/@deepseek-ai/schemastery
+node_modules/@standard-schema/*
+!node_modules/@standard-schema/spec
+*.log
+.DS_Store
+Thumbs.db
