@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-session-index 操作使用手册 v2.3.0</title>
+<style>
+  :root{
+    --bg:#f7f9fc; --panel:#ffffff; --panel-2:#f1f5fb; --line:#e2e8f2;
+    --text:#1f2937; --muted:#64748b; --accent:#3563d6; --accent-soft:#e8efff;
+    --green:#0f7a55; --green-soft:#e6f5ee; --amber:#9a6200; --amber-soft:#fff4dc;
+    --code:#f3f6fb; --radius:10px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,-apple-system,sans-serif;
+    font-size:14.5px;line-height:1.75}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .layout{display:flex;min-height:100vh}
+  aside{width:256px;flex:0 0 256px;background:var(--panel);border-right:1px solid var(--line);
+    padding:22px 14px 40px;position:sticky;top:0;height:100vh;overflow:auto}
+  .brand{font-size:16px;font-weight:700;letter-spacing:.2px;margin:0 8px 4px}
+  .brand small{display:block;color:var(--muted);font-weight:400;font-size:12px;margin-top:3px}
+  #q{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;
+    background:var(--panel-2);color:var(--text);font-size:13px;margin:16px 0 12px;outline:none}
+  #q:focus{border-color:var(--accent);background:#fff}
+  nav a{display:block;padding:6px 10px;border-radius:7px;color:var(--muted);font-size:13px;margin:1px 0}
+  nav a:hover{background:var(--panel-2);color:var(--text);text-decoration:none}
+  nav a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  nav .grp{margin:14px 10px 5px;font-size:11px;letter-spacing:1px;color:#94a3b8;font-weight:700}
+  main{flex:1;min-width:0;padding:34px 46px 90px;max-width:1180px;margin:0 auto}
+  header.hero{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:28px 30px;margin-bottom:26px}
+  header.hero h1{margin:0 0 8px;font-size:27px;letter-spacing:.3px}
+  header.hero p{margin:0;color:var(--muted);max-width:840px}
+  .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .badge{background:var(--panel-2);border:1px solid var(--line);border-radius:999px;
+    padding:4px 12px;font-size:12px;color:var(--muted)}
+  .badge b{color:var(--accent);font-size:13px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    padding:24px 28px;margin:0 0 20px;scroll-margin-top:18px}
+  h2{font-size:20px;margin:0 0 14px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:22px 0 9px}
+  p{margin:9px 0}
+  ul,ol{margin:9px 0;padding-left:22px}
+  li{margin:4px 0}
+  code{background:var(--code);border:1px solid var(--line);border-radius:4px;
+    padding:1px 5px;font-family:"Cascadia Code",Consolas,"SFMono-Regular",monospace;font-size:12.5px;color:#334155}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:8px;
+    padding:13px 15px;overflow:auto;font-size:12.5px;line-height:1.6;margin:10px 0;position:relative}
+  pre code{background:none;border:0;padding:0;color:#26344a}
+  .copy{position:absolute;top:7px;right:8px;background:var(--panel);border:1px solid var(--line);
+    color:var(--muted);border-radius:6px;font-size:11px;padding:3px 9px;cursor:pointer}
+  .copy:hover{color:var(--accent);border-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.2px}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel-2);font-weight:600;white-space:nowrap}
+  tbody tr:nth-child(even){background:#fbfcfe}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:14px 0}
+  .card{background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:14px 16px}
+  .card b{display:block;margin-bottom:5px;color:var(--accent)}
+  .note{background:var(--amber-soft);border-left:3px solid #e0a83a;padding:11px 14px;border-radius:0 7px 7px 0;margin:12px 0}
+  .tip{background:var(--green-soft);border-left:3px solid #3bab7e;padding:11px 14px;border-radius:0 7px 7px 0;margin:12px 0}
+  .warn{background:#fdeaea;border-left:3px solid #d9534f;padding:11px 14px;border-radius:0 7px 7px 0;margin:12px 0}
+  details{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 14px;margin:9px 0}
+  summary{cursor:pointer;font-weight:600;font-size:13.5px}
+  .hidden{display:none !important}
+  footer{color:var(--muted);font-size:12px;text-align:center;padding:18px}
+  @media(max-width:900px){aside{display:none}main{padding:20px 16px 60px}}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside>
+  <div class="brand">dsh-session-index<small>操作使用手册 · v2.3.0</small></div>
+  <input id="q" type="search" placeholder="筛选章节 / 关键词…" autocomplete="off">
+  <nav id="nav">
+    <div class="grp">开始</div>
+    <a href="#s1">1. 这是什么</a>
+    <a href="#s2">2. 从仓库拉取安装</a>
+    <a href="#s3">3. 新会话免重启识别</a>
+    <a href="#s4">4. 完全化插件与自动打包</a>
+    <div class="grp">能力</div>
+    <a href="#s5">5. 可写入长期记忆</a>
+    <a href="#s6">6. 跨应用统一索引</a>
+    <a href="#s7">7. 语义检索</a>
+    <a href="#s8">8. 自动注入上下文</a>
+    <div class="grp">参考</div>
+    <a href="#s9">9. 13 个工具全参考</a>
+    <a href="#s10">10. Prompts / Resources</a>
+    <a href="#s11">11. 典型场景操作</a>
+    <a href="#s12">12. 配置与命令速查</a>
+    <a href="#s13">13. 故障排查与回滚</a>
+    <a href="#s14">14. 目录结构与验证记录</a>
+  </nav>
+</aside>
+
+<main>
+<header class="hero">
+  <h1>dsh-session-index 操作使用手册</h1>
+  <p>完全化的 MCP 插件：一条命令安装，之后自动配置、自动建索引、<b>新会话由文件事件自动识别（无需重启 DSH）</b>、索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。</p>
+  <div class="badges">
+    <span class="badge">版本 <b>v2.3.0</b></span>
+    <span class="badge">安装命令 <b>1 条</b></span>
+    <span class="badge">会话 <b>32</b>（自动增长）</span>
+    <span class="badge">工具 <b>13</b> / 提示词 <b>4</b> / 资源 <b>7+1</b></span>
+    <span class="badge">新会话识别 <b>免重启</b></span>
+    <span class="badge">分发包 <b>自动生成</b></span>
+    <span class="badge">冒烟 <b>66/66</b></span>
+  </div>
+</header>
+
+<section id="s1" data-kw="概览 架构 是什么 数据流">
+  <h2>1. 这是什么</h2>
+  <p>它是一个 <b>MCP (stdio) 插件</b>。DSH 通过内置 <code>dsh-mcp-client</code> 连接它，Agent 就能用 13 个工具查历史。插件自带 <code>install.mjs</code>，自动把连接写进 DSH 配置，<b>不需要手工填表或改 YAML</b>；<code>plugin.json</code> 是机器可读能力清单，<code>dist/*.zip</code> 是可分发包。</p>
+<pre><button class="copy">复制</button><code>DSH  ~/.dsh/sessions/**/session.v4.jsonl.zstd   (分帧 zstd)
+WorkBuddy  ~/.workbuddy/projects/&lt;工作区&gt;/&lt;会话id&gt;.jsonl
+        │  fs.watch 事件 → 防抖 → 后台子进程增量构建
+        ▼
+~/.dsh/session-index/   meta / cards / notes / vectors / &lt;id&gt;.jsonl.gz
+        │  MCP stdio (JSON-RPC 2.0)
+        ▼  13 tools + 4 prompts + 7 resources + 1 模板 + instructions + listChanged
+        │
+        ▼  DSH / WorkBuddy 里的 Agent</code></pre>
+  <div class="tip"><b>关键收益：</b>原始会话约 55 MB 且分帧压缩，直接读要反复解压。建一次索引约 10 秒，之后新会话由事件驱动约数十毫秒纳入；查询只读派生索引并返回片段，不重复读源文件。</div>
+</section>
+
+<section id="s2" data-kw="安装 快速开始 上手 github clone 拉取 仓库 install setup 双击 cmd sh 命令">
+  <h2>2. 从 GitHub 仓库拉取安装（只需一次）</h2>
+  <p>仓库 <code>Lau-Jin/DSH</code> 的<b>根目录就是插件根</b>，拉下来就能装，不需要子目录、不需要解压、不需要改路径。</p>
+<pre><button class="copy">复制</button><code>git clone git@github.com:Lau-Jin/DSH.git
+cd DSH
+install.cmd          # Windows 可直接双击；macOS / Linux / Git Bash 用 ./install.sh</code></pre>
+  <p>这两个脚本只是包装，实际执行 <code>node install.mjs</code>，自动完成：解析 Node ≥ 22.15 → 备份并幂等写入 MCP 配置段 → 安装 Skill → 开启自动维护 → <b>生成插件包与技能包</b> → 打印 6 项校验。</p>
+  <div class="note">若 DSH 正在运行且工具列表未刷新，<b>完全退出 DSH 桌面端再打开</b>（最小化无效）。之后日常使用<b>不需要任何命令行</b>，新会话也无需重启。</div>
+
+  <h3>前置条件</h3>
+  <table>
+    <tr><th>条件</th><th>说明</th></tr>
+    <tr><td>Node.js ≥ 22.15</td><td><code>node -v</code> 确认。低于此版本没有 <code>zlib.zstdDecompressSync</code>，无法解压会话文件</td></tr>
+    <tr><td>Git + GitHub SSH key</td><td>私有仓库，<code>ssh -T git@github.com</code> 应返回 <code>Hi &lt;账号&gt;! You've successfully authenticated</code></td></tr>
+  </table>
+
+  <h3>常用命令</h3>
+  <table>
+    <tr><th>命令</th><th>用途</th></tr>
+    <tr><td><code>install.cmd</code> / <code>node install.mjs</code></td><td>安装（幂等，更新后重跑也安全）</td></tr>
+    <tr><td><code>update.cmd</code> / <code>./update.sh</code></td><td><code>git pull</code> 后重装，<b>保留手工改过的 env</b></td></tr>
+    <tr><td><code>node install.mjs --dry-run</code></td><td>预览改动，不写文件</td></tr>
+    <tr><td><code>node install.mjs --verify</code></td><td>校验配置、Node、Skill、索引（6 项）</td></tr>
+    <tr><td><code>node install.mjs --uninstall</code></td><td>一键回滚，保留备份</td></tr>
+    <tr><td><code>node install.mjs --reset-env</code></td><td>用默认值覆盖 env 自定义</td></tr>
+    <tr><td><code>node pack.mjs</code></td><td>重新生成插件包 + 技能包</td></tr>
+    <tr><td><code>node smoke.mjs</code></td><td>66 项端到端自测</td></tr>
+  </table>
+
+  <h3>换机器 / 换目录</h3>
+  <p>索引产物固定在 <code>~/.dsh/session-index</code>，与代码目录分离。因此把仓库 clone 到任意位置再跑一次安装即可，历史索引不会丢；安装器只改指向的 <code>server.mjs</code> 绝对路径。</p>
+
+  <details><summary>手动备选：面板添加 / 手写 YAML（一般不用）</summary>
+<pre><button class="copy">复制</button><code>- id: mcp-session-index
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    serverName: session-index
+    transport: stdio
+    command: 'C:\Program Files\nodejs\node.exe'
+    args: [ 'D:\DSH\server.mjs' ]
+    env: {}</code></pre>
+    <p>install.mjs 生成的版本还写入 <code>DSH_HOME</code>、<code>SESSION_INDEX_DIR</code> 与自动维护开关，更稳妥。Windows 路径必须放 YAML 单引号里。</p>
+  </details>
+</section>
+
+<section id="s3" data-kw="新会话 自动识别 事件驱动 fs.watch 免重启 通知 listChanged">
+  <h2>3. 新会话免重启识别</h2>
+  <p>这是 v2.2.0 引入、v2.3.0 沿用的核心能力：<b>新会话产生后不需要重启 DSH，也不需要等定时轮询</b>。</p>
+  <div class="grid">
+    <div class="card"><b>文件事件监听</b><code>fs.watch(recursive)</code> 监听 DSH 与 WorkBuddy 会话目录，写入事件防抖 3.5 秒后触发后台增量构建。</div>
+    <div class="card"><b>全新会话立即纳入</b>静止期只作用于「已有索引且正在写入」的旧会话；新会话第一次发现就建索引，避免被永久跳过。</div>
+    <div class="card"><b>调用前即时检查</b>每次工具调用前做轻量 <code>stat</code> 扫描，发现变化立即触发（10 秒节流），不等定时器。</div>
+    <div class="card"><b>主动通知客户端</b>索引确有更新时发送 <code>resources/prompts list_changed</code>（30 秒节流），MCP 客户端自动刷新上下文。</div>
+  </div>
+  <p>实测：写入新会话 → <code>fs-event</code> 触发 → 重建 1 个 / 70ms → 发出通知 → <code>list</code>/<code>search</code> 立即可查，全程未重启。默认静止期 6000 下同样通过。</p>
+  <h3>状态字段（<code>session_index_status</code> → <code>autoIndex</code>）</h3>
+  <table>
+    <tr><th>字段</th><th>含义</th></tr>
+    <tr><td><code>watch.watching</code> / <code>watch.events</code></td><td>已监听目录数 / 累计文件事件数</td></tr>
+    <tr><td><code>watch.lastEventAt</code> / <code>lastTriggeredAt</code></td><td>最近事件 / 最近触发构建时间</td></tr>
+    <tr><td><code>lastResult.reason</code></td><td><code>fs-event</code> / <code>on-demand</code> / <code>interval</code> / <code>startup-refresh</code></td></tr>
+    <tr><td><code>notifications</code></td><td>已发送的客户端通知次数</td></tr>
+    <tr><td><code>runs</code> / <code>failures</code> / <code>lastError</code></td><td>累计构建、失败与最近错误</td></tr>
+  </table>
+  <div class="tip">若平台不支持递归监听（权限/旧内核），监听会静默失败，60 秒定时轮询自动兜底，功能不受影响。</div>
+</section>
+
+<section id="s4" data-kw="完全化插件 自动打包 技能包 plugin.json 分发 zip MCP识别">
+  <h2>4. 完全化插件与自动打包</h2>
+  <h3>插件形态</h3>
+  <table>
+    <tr><th>文件 / 机制</th><th>作用</th></tr>
+    <tr><td><code>plugin.json</code></td><td>机器可读清单：13 工具、4 prompts、7 resources、自动化配置、包信息、依赖与安全声明；也通过 <code>session-index://plugin.json</code> 暴露</td></tr>
+    <tr><td><code>package.json</code> 的 <code>dsh.plugin</code></td><td>DSH 插件元信息：id、entry、install/verify/uninstall/package 命令</td></tr>
+    <tr><td><code>initialize.instructions</code></td><td>握手即返回使用约定，客户端无需外部文档</td></tr>
+    <tr><td><code>SKILL.md</code></td><td>自动安装到 <code>~/.dsh/skills/session-index/</code>，客户端不支持 prompts/resources 时兜底</td></tr>
+    <tr><td><code>listChanged</code></td><td>能力声明 + 索引更新通知，客户端自动刷新</td></tr>
+    <tr><td><code>dist/*.zip</code></td><td>可分发包，接收方解压后 <code>node install.mjs</code> 即用</td></tr>
+  </table>
+  <h3>自动打包（无需手工压缩）</h3>
+  <p><code>lib/pack.mjs</code> 是纯 Node 零依赖 ZIP writer（DEFLATE + CRC32 + 中央目录），不引入 archiver/jszip。安装时自动生成，也可随时重打：</p>
+<pre><button class="copy">复制</button><code>node pack.mjs                # 生成两种包
+node pack.mjs skill          # 只打技能包
+node pack.mjs status         # 查看已生成包
+node pack.mjs verify         # 校验 zip 结构
+session_index_package { "mode": "all" }   # MCP 工具，Agent 也能触发</code></pre>
+  <table>
+    <tr><th>包</th><th>内容</th><th>用途</th></tr>
+    <tr><td><code>dsh-session-index-v2.3.0.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + 一键脚本 + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
+    <tr><td><code>session-index-skill-v2.3.0.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
+  </table>
+  <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方解压后运行 <code>node install.mjs</code> 即完成安装。</div>
+</section>
+
+<section id="s5" data-kw="长期记忆 remember recall forget 写入 决策 偏好 归档">
+  <h2>5. 可写入长期记忆</h2>
+  <p>会话卡是历史的<b>只读</b>摘要；长期记忆是主动写入的结论，跨会话持久保存，<code>brief</code> 与语义搜索自动召回。存 <code>notes.json</code>，写前备份、原子写入。</p>
+  <table>
+    <tr><th>type</th><th>用途</th></tr>
+    <tr><td><code>decision</code> / <code>fact</code></td><td>已定方案 / 客观事实</td></tr>
+    <tr><td><code>preference</code> / <code>todo</code></td><td>偏好约定 / 待办</td></tr>
+    <tr><td><code>pitfall</code> / <code>note</code></td><td>踩过的坑 / 其它（默认）</td></tr>
+  </table>
+<pre><button class="copy">复制</button><code>session_index_remember { "text": "TokenHub 通用 Key 用 /v1，maxTokens 必须 8192",
+  "type": "decision", "tags": ["tokenhub"], "importance": 5 }
+session_index_recall  { "query": "TokenHub", "limit": 5 }
+session_index_forget  { "id": "n-xxxx" }                 // 归档，可恢复
+session_index_forget  { "id": "n-xxxx", "purge": true }  // 物理删除</code></pre>
+  <p>相同文本+类型自动合并；召回按相关度 + 重要度 + 新鲜度排序。</p>
+</section>
+
+<section id="s6" data-kw="跨应用 WorkBuddy 多源 app 过滤 统一索引">
+  <h2>6. 跨应用统一索引</h2>
+  <table>
+    <tr><th>app</th><th>数据位置</th><th>格式</th></tr>
+    <tr><td><code>dsh</code></td><td><code>~/.dsh/sessions/**/session.v4.jsonl.zstd</code></td><td>上千独立 zstd 帧拼接</td></tr>
+    <tr><td><code>workbuddy</code></td><td><code>~/.workbuddy/projects/&lt;工作区&gt;/&lt;会话id&gt;.jsonl</code></td><td>message / function_call / ai-title</td></tr>
+  </table>
+  <p>WorkBuddy 适配器取 <code>aiTitle</code> 作标题、剥除注入块但保留真实提问；id 加 <code>wb:</code> 前缀。所有工具支持 <code>app</code> 过滤，关联可跨应用。</p>
+<pre><button class="copy">复制</button><code>session_index_list    { "app": "workbuddy" }
+session_index_search  { "query": "插件", "app": "workbuddy" }
+session_index_related { "sessionId": "wb:3aa3ea8d", "app": "all" }</code></pre>
+</section>
+
+<section id="s7" data-kw="语义检索 BM25 同义词 keyword hybrid vector 模式">
+  <h2>7. 语义检索</h2>
+  <p>默认 <code>semantic</code>：18 组中英同义扩展 → 候选召回 → 只在候选集上 BM25 重排，纯本地零 token；结果标注 <code>matchType: exact | expanded</code>。</p>
+  <table>
+    <tr><th>mode</th><th>行为</th></tr>
+    <tr><td><code>semantic</code>（默认）</td><td>同义扩展 + BM25</td></tr>
+    <tr><td><code>keyword</code></td><td>所有词 AND 子串，精确查报错码/路径</td></tr>
+    <tr><td><code>hybrid</code> / <code>vector</code></td><td>叠加可选向量；未配置 embedding 自动降级为 semantic</td></tr>
+  </table>
+<pre><button class="copy">复制</button><code>session_index_search { "query": "插件报错怎么修", "limit": 8 }
+session_index_search { "query": "402 401008", "mode": "keyword" }</code></pre>
+  <p>只返回命中片段（默认每条约 360 字），<code>total</code> 只是计数，不灌全文。</p>
+</section>
+
+<section id="s8" data-kw="自动注入 prompts resources 上下文 Skill 通知">
+  <h2>8. 自动注入上下文</h2>
+  <div class="grid">
+    <div class="card"><b>prompts/get → session-context</b>索引概览 + 长期记忆 + 历史结论 + 相关会话 + 使用约定。</div>
+    <div class="card"><b>resources/read → guide</b>客户端可自动挂载完整使用说明；<code>plugin.json</code> / <code>package</code> 提供机器可读清单。</div>
+    <div class="card"><b>listChanged 通知</b>新会话入索引后主动通知客户端刷新，无需重启或手动重连。</div>
+  </div>
+<pre><button class="copy">复制</button><code>prompts/get  { "name": "session-context", "arguments": { "query": "周报" } }
+prompts/get  { "name": "quickstart" }
+resources/read { "uri": "session-index://guide" }
+resources/read { "uri": "session-index://package" }</code></pre>
+</section>
+
+<section id="s9" data-kw="工具 参考 参数 13 个">
+  <h2>9. 13 个工具全参考</h2>
+  <table>
+    <tr><th>工具</th><th>作用</th><th>主要参数</th></tr>
+    <tr><td><code>session_index_status</code></td><td>索引/记忆/检索模式/<b>自动维护与监听状态</b>/分发包</td><td>无</td></tr>
+    <tr><td><code>session_index_brief</code></td><td>跨会话结论速览 + 自动融合记忆</td><td><code>query, app, workspace, limit, memoryLimit, includeMemory, maxChars</code></td></tr>
+    <tr><td><code>session_index_list</code></td><td>会话清单（含 app）</td><td><code>app, workspace, since, until, limit, offset</code></td></tr>
+    <tr><td><code>session_index_related</code></td><td>相关会话 + 关联理由</td><td><code>sessionId | query, app, workspace, limit</code></td></tr>
+    <tr><td><code>session_index_thread</code></td><td>父子会话血缘链</td><td><code>sessionId, maxDepth</code></td></tr>
+    <tr><td><code>session_index_search</code></td><td>语义/精确/混合检索，只返回片段</td><td><code>query, mode, app, workspace, sessionId, role, type, includeSystem, since, until, limit, offset, contextChars</code></td></tr>
+    <tr><td><code>session_index_get</code></td><td>骨架或完整原文</td><td><code>sessionId, seqs, seqFrom, seqTo, maxChars</code></td></tr>
+    <tr><td><code>session_index_remember</code></td><td>写入长期记忆</td><td><code>text, type, tags, importance, sessionId, app</code></td></tr>
+    <tr><td><code>session_index_recall</code></td><td>召回长期记忆</td><td><code>query, type, tags, limit, includeArchived</code></td></tr>
+    <tr><td><code>session_index_forget</code></td><td>归档/删除记忆</td><td><code>id, purge</code></td></tr>
+    <tr><td><code>session_index_package</code></td><td><b>自动打包插件/技能包</b></td><td><code>mode: plugin / skill / all / status</code></td></tr>
+    <tr><td><code>session_index_vectors</code></td><td>向量缓存状态/同步/查询</td><td><code>action, query, limit</code></td></tr>
+    <tr><td><code>session_index_refresh</code></td><td><b>手动</b>立即刷新；日常由事件+轮询自动维护</td><td><code>force</code></td></tr>
+  </table>
+  <details><summary>通用约定</summary>
+    <ul>
+      <li>会话 id 支持前缀匹配；时间参数 Unix 毫秒；各 <code>limit</code> 有硬上限。</li>
+      <li>所有工具只读索引；<code>remember/forget/package/refresh</code> 只写派生目录。</li>
+      <li>错误统一返回 <code>{"error":"中文说明"}</code> 且 <code>isError: true</code>，不泄漏堆栈。</li>
+      <li>服务日志走 stderr，stdout 只写 JSON-RPC 与通知。</li>
+    </ul>
+  </details>
+<pre><button class="copy">复制</button><code>brief（接上历史+记忆） → related / thread → search（片段） → get（原文） → remember
+需要分发时 package；索引与新会话由后台自动维护，通常不需要 refresh</code></pre>
+</section>
+
+<section id="s10" data-kw="prompts resources 参考 URI 模板">
+  <h2>10. Prompts / Resources 参考</h2>
+  <h3>Prompts（4 个）</h3>
+  <table>
+    <tr><th>name</th><th>参数</th><th>内容</th></tr>
+    <tr><td><code>session-context</code></td><td><code>query?</code>, <code>limit?</code></td><td>索引概览 + 记忆 + 历史结论 + 相关会话</td></tr>
+    <tr><td><code>resume-topic</code></td><td><code>topic</code>（必需）</td><td>聚焦某主题继续工作</td></tr>
+    <tr><td><code>catch-up</code></td><td>无</td><td>最近会话结论 + 待办/决策记忆</td></tr>
+    <tr><td><code>quickstart</code></td><td>无</td><td>完整使用说明（等同 guide 资源）</td></tr>
+  </table>
+  <h3>Resources（7 个 + 1 模板）</h3>
+  <table>
+    <tr><th>URI</th><th>返回</th></tr>
+    <tr><td><code>session-index://guide</code></td><td>完整使用说明（Markdown）</td></tr>
+    <tr><td><code>session-index://plugin.json</code></td><td>机器可读插件能力清单</td></tr>
+    <tr><td><code>session-index://package</code></td><td>已生成的分发包清单</td></tr>
+    <tr><td><code>session-index://brief</code> / <code>memory</code> / <code>status</code> / <code>cards</code></td><td>速览 / 记忆 / 状态 / 会话卡（JSON）</td></tr>
+    <tr><td><code>session-index://card/{id}</code></td><td>模板资源：单张会话卡</td></tr>
+  </table>
+  <p>协议方法：<code>initialize</code>（instructions）、<code>tools/list</code>、<code>tools/call</code>、<code>prompts/list/get</code>、<code>resources/list</code>、<code>resources/templates/list</code>、<code>resources/read</code>，以及服务端主动通知 <code>notifications/resources/list_changed</code>、<code>notifications/prompts/list_changed</code>。</p>
+</section>
+
+<section id="s11" data-kw="场景 操作 示例 怎么用 典型">
+  <h2>11. 典型场景操作</h2>
+  <h3>新会话快速接上历史 / 接着上次任务</h3>
+<pre><button class="copy">复制</button><code>session_index_brief   { "query": "思源桥", "limit": 5 }
+session_index_related { "query": "思源桥", "limit": 6 }
+session_index_search  { "query": "思源桥 插件 加载失败", "limit": 8 }</code></pre>
+  <h3>找很久以前某个报错 / 查 WorkBuddy 会话</h3>
+<pre><button class="copy">复制</button><code>session_index_search { "query": "402 401008 免费额度", "limit": 8 }
+session_index_get    { "sessionId": "&lt;命中 id&gt;", "seqs": [&lt;seq&gt;], "maxChars": 6000 }
+session_index_list   { "app": "workbuddy" }</code></pre>
+  <h3>沉淀结论 / 管理记忆</h3>
+<pre><button class="copy">复制</button><code>session_index_remember { "text": "会话索引走 MCP server，不做 UI 面板",
+  "type": "decision", "tags": ["架构"], "importance": 5 }
+session_index_recall   { "type": "todo", "limit": 20 }
+session_index_forget   { "id": "n-xxxx" }</code></pre>
+  <h3>打包分发 / 检查自动维护</h3>
+<pre><button class="copy">复制</button><code>session_index_package { "mode": "all" }     // 或 skill / plugin / status
+session_index_status                        // 看 autoIndex.watch 与 packs
+session_index_refresh                       // 仅改规则或需即时生效时</code></pre>
+  <div class="tip">刚开的新会话查不到？等几秒即可（事件防抖 3.5 秒 + 毫秒级构建），<b>不需要重启 DSH</b>；<code>status</code> 的 <code>autoIndex.watch.events</code> 可确认监听在跑。</div>
+</section>
+
+<section id="s12" data-kw="配置 环境变量 命令 速查 CLI">
+  <h2>12. 配置与命令速查</h2>
+  <div class="tip"><b>日常只需要：安装时 <code>node install.mjs</code>，之后完全不碰命令行。</b>下表仅供高级调整与排错。</div>
+  <h3>环境变量</h3>
+  <table>
+    <tr><th>变量</th><th>默认</th><th>说明</th></tr>
+    <tr><td><code>DSH_HOME</code> / <code>DSH_SESSIONS_DIR</code></td><td><code>~/.dsh</code> / <code>sessions</code></td><td>DSH 主目录与会话库</td></tr>
+    <tr><td><code>SESSION_INDEX_DIR</code></td><td><code>$DSH_HOME/session-index</code></td><td>索引产物目录</td></tr>
+    <tr><td><code>SESSION_INDEX_APPS</code></td><td><code>dsh,workbuddy</code></td><td>要索引的源</td></tr>
+    <tr><td><code>WORKBUDDY_PROJECTS_DIR</code></td><td><code>~/.workbuddy/projects</code></td><td>WorkBuddy 会话目录</td></tr>
+    <tr><td><code>SESSION_INDEX_AUTO</code></td><td><code>1</code></td><td><code>0</code> 关闭全部自动维护</td></tr>
+    <tr><td><code>SESSION_INDEX_AUTO_INTERVAL_MS</code> / <code>AUTO_QUIET_MS</code></td><td><code>60000</code> / <code>45000</code></td><td>定时轮询间隔 / 旧会话静止期</td></tr>
+    <tr><td><code>SESSION_INDEX_WATCH</code></td><td><code>1</code></td><td><code>0</code> 只关事件监听（保留轮询）</td></tr>
+    <tr><td><code>SESSION_INDEX_WATCH_DEBOUNCE_MS</code></td><td><code>3500</code></td><td>事件防抖</td></tr>
+    <tr><td><code>SESSION_INDEX_WATCH_QUIET_MS</code></td><td><code>6000</code></td><td>事件触发时的静止判定；<b>0 是合法值</b></td></tr>
+    <tr><td><code>SESSION_INDEX_EMBED_URL / MODEL / KEY</code></td><td>空</td><td>可选向量；密钥只放环境变量</td></tr>
+  </table>
+  <div class="note">install.mjs 每次运行会把标记块内 <code>env</code> 重写为默认值。手改这些值后<b>不要重跑 install.mjs</b>，否则会被覆盖。</div>
+  <h3>命令</h3>
+  <table>
+    <tr><th>命令</th><th>用途</th></tr>
+    <tr><td><code>node install.mjs</code>（含 --verify / --uninstall / --dry-run）</td><td>安装、校验、回滚、预览</td></tr>
+    <tr><td><code>node pack.mjs</code>（含 status / verify / plugin / skill）</td><td>自动打包与校验</td></tr>
+    <tr><td><code>node build-index.mjs --force</code></td><td>全量重建（改抽取规则后）</td></tr>
+    <tr><td><code>node smoke.mjs</code> / <code>npm run check</code></td><td>66 项自测 / 语法检查</td></tr>
+  </table>
+</section>
+
+<section id="s13" data-kw="故障 排查 报错 回滚 安全 备份 卸载">
+  <h2>13. 故障排查、安全与回滚</h2>
+  <table>
+    <tr><th>现象</th><th>处理</th></tr>
+    <tr><td>工具列表没出现 / 不是 13 个</td><td>完全退出 DSH 再打开；或 <code>node install.mjs --verify</code></td></tr>
+    <tr><td>新会话查不到</td><td>等 3~5 秒（事件防抖）；<code>status</code> 看 <code>autoIndex.watch.events</code> 与 <code>lastResult.reason</code>；仍不行手动 <code>refresh</code></td></tr>
+    <tr><td>监听未建立（watch.watching=0）</td><td>平台不支持递归监听，60 秒轮询自动兜底；也可用 <code>SESSION_INDEX_WATCH=0</code> 明确关闭</td></tr>
+    <tr><td>「索引正在后台自动构建」</td><td>首次启动正常现象，等待几秒</td></tr>
+    <tr><td>自动刷新没生效</td><td>看 <code>autoIndex.enabled/failures/lastError</code>，确认 <code>SESSION_INDEX_AUTO</code> 不是 0</td></tr>
+    <tr><td>打包失败 / zip 打不开</td><td><code>node pack.mjs verify</code> 校验；包由纯 Node ZIP writer 生成，已用系统解压工具验证</td></tr>
+    <tr><td>prompts/resources 看不到</td><td>客户端可能只实现 tools；Skill 自动兜底，工具不受影响</td></tr>
+    <tr><td>语义结果太宽泛</td><td>用 <code>mode: "keyword"</code> 或调小 <code>limit</code>，看 <code>matchType</code></td></tr>
+    <tr><td>hybrid 返回 degraded</td><td>正常：未配置 embedding 自动降级</td></tr>
+  </table>
+  <h3>安全与回滚</h3>
+  <ul>
+    <li>索引含会话全文，只落在本机 <code>~/.dsh/session-index/</code>，<b>不要打包分享</b>；分发包已自动排除这些数据。</li>
+    <li>源会话（DSH / WorkBuddy）<b>全程只读</b>。<code>install.mjs</code> 写配置前自动备份，只改带标记整段，幂等可回滚。</li>
+    <li><code>forget</code> 默认归档不删除；<code>notes.json</code> 写前留备份。</li>
+  </ul>
+<pre><button class="copy">复制</button><code>node install.mjs --uninstall      // 移除配置段与自动装的 Skill（先备份）
+完全退出 DSH 再打开
+可选：删除 ~/.dsh/session-index/ 与 dist/（不影响任何原始会话）</code></pre>
+</section>
+
+<section id="s14" data-kw="目录结构 验证记录 版本 文件清单">
+  <h2>14. 目录结构与验证记录</h2>
+<pre><button class="copy">复制</button><code>DSH/                        ← 仓库根 = 插件根（git clone 下来直接装）
+├── install.cmd / install.sh    一键安装（Windows 双击 / 跨平台执行）
+├── update.cmd / update.sh      更新：git pull + 重装（保留 env 自定义）
+├── install.mjs             安装 / 校验 / 回滚 / 自动打包
+├── pack.mjs                打包 CLI
+├── server.mjs              MCP 服务：13 工具 + 4 prompts + resources + 通知
+├── build-index.mjs         多源增量构建器（--quiet 静止期）
+├── smoke.mjs               66 项端到端自测
+├── plugin.json             机器可读插件能力清单（含仓库安装信息）
+├── package.json            v2.3.0 / dsh.plugin / repository / 脚本
+├── 操作使用手册.html       本文档
+├── README.md               仓库首页 = 安装与使用说明
+├── skill/SKILL.md          自动接入技能
+├── dist/                   自动生成的插件包 / 技能包（git 忽略）
+└── lib/
+    ├── auto.mjs            自动索引守护（定时 + 即时检查 + 通知回调）
+    ├── watch.mjs           fs.watch 事件驱动识别新会话
+    ├── pack.mjs            零依赖 ZIP writer + 清单
+    ├── reader.mjs          多帧 zstd 解压
+    ├── extract.mjs         事件 → 记录（去噪、注入识别、标题）
+    ├── cards.mjs           会话卡 / 关联 / 主题 / 血缘
+    ├── source-workbuddy.mjs WorkBuddy 适配器
+    ├── semantic.mjs        同义扩展 + BM25 + RRF
+    ├── embedding.mjs       可选向量嵌入与缓存
+    ├── notes.mjs           长期记忆库
+    └── index-store.mjs     各类 JSON 文档与分片读写</code></pre>
+  <h3>验证记录（2026-11-13，v2.3.0）</h3>
+  <table>
+    <tr><th>项</th><th>结果</th></tr>
+    <tr><td>仓库拉取安装</td><td>干净 clone 到全新目录 → <code>install.mjs</code> 用独立 profile 完成安装 → <code>--verify</code> 通过；配置指向 clone 目录，索引沿用 <code>~/.dsh/session-index</code></td></tr>
+    <tr><td>重装保留配置</td><td>重复安装显示「保留 env 6 项」，配置块无变更、不产生重复条目；<code>--reset-env</code> 可显式重置</td></tr>
+    <tr><td>一键安装</td><td><code>--dry-run</code> 预览、实际安装（含备份）、<code>--verify</code> 6/6 通过</td></tr>
+    <tr><td>新会话免重启</td><td>临时目录写入新会话 → <code>fs-event</code> → 重建 1 个 / 70ms → 通知 → <code>list</code>/<code>search</code> 立即可查；默认静止期 6000 下同样通过</td></tr>
+    <tr><td>自动打包</td><td>插件包含脚本与文档，技能包 3 文件；系统 <code>Expand-Archive</code> 解压成功，0 敏感文件，CRC 与中央目录有效</td></tr>
+    <tr><td>全量冒烟</td><td><b>66/66 通过</b>；全量语法检查通过；手册自包含 14 章</td></tr>
+  </table>
+  <h3>版本演进</h3>
+  <ul>
+    <li><b>v1.0.0</b> DSH 会话增量索引 + 5 工具；<b>v1.1.0</b> 会话卡与跨会话层（8 工具）；<b>v2.0.0</b> 长期记忆、跨应用、语义检索、prompts/resources（12 工具）。</li>
+    <li><b>v2.1.0</b> 装上即用：一键安装、自动建索引与定时刷新、MCP 自描述。</li>
+    <li><b>v2.2.0</b> 完全化插件：文件事件驱动识别新会话（免重启）、索引变更主动通知、自动打包插件与技能包（13 工具）。</li>
+    <li><b>v2.3.0</b> 仓库化分发：<code>Lau-Jin/DSH</code> 只存本插件、仓库根即插件根，新增 <code>install.cmd/sh</code> 与 <code>update.cmd/sh</code> 一键入口；重装自动保留手工改过的 env。</li>
+  </ul>
+</section>
+
+<footer>dsh-session-index v2.3.0 · 操作使用手册 · 生成于 2026-11-13 · 零第三方依赖</footer>
+</main>
+</div>
+<script>
+(function(){
+  var links=[].slice.call(document.querySelectorAll('#nav a'));
+  var sections=[].slice.call(document.querySelectorAll('main section'));
+  var q=document.getElementById('q');
+  function onScroll(){
+    var cur='';
+    sections.forEach(function(s){ if(s.getBoundingClientRect().top<=140) cur=s.id; });
+    links.forEach(function(a){ a.classList.toggle('active', a.getAttribute('href')==='#'+cur); });
+  }
+  window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+  q.addEventListener('input',function(){
+    var k=q.value.trim().toLowerCase();
+    sections.forEach(function(s){
+      var hay=(s.textContent+' '+(s.getAttribute('data-kw')||'')).toLowerCase();
+      s.classList.toggle('hidden', k!=='' && hay.indexOf(k)===-1);
+    });
+  });
+  document.querySelectorAll('.copy').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var pre=btn.parentNode, code=pre.querySelector('code');
+      var text=code?code.innerText:pre.innerText;
+      navigator.clipboard.writeText(text).then(function(){
+        var old=btn.textContent; btn.textContent='已复制';
+        setTimeout(function(){btn.textContent=old;},1400);
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>

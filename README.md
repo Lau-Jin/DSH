@@ -1,148 +1,224 @@
-# DSH 插件仓库
+# dsh-session-index
 
-本机正在使用的 [DeepSeek Harness（DSH）](https://github.com/deepseek-ai) 轻量插件。
-**每个插件一个独立的私有仓库**，安装时按需分别拉取，互不牵连。
+> DSH（DeepSeek Harness）+ WorkBuddy 的**全会话索引与跨会话记忆** MCP 插件。
+> 拉取仓库 → 双击安装 → 之后全自动。零第三方依赖，源会话文件全程只读。
 
-- 目标 DSH 版本：`>= 0.2.1-rc.3 < 0.3.0`（整理时本机 `dsh -V` = `0.2.1-rc.5`）
-- 安装前置：
-  - Git for Windows（本机 `2.56.0.4`），安装 git 依赖时要调用 `git clone`
-  - GitHub SSH key（默认 `~/.ssh/id_ed25519`），且 `ssh -T git@github.com` 返回 `Hi <账号>! You've successfully authenticated...`
-  - 建议设置 `GIT_SSH_COMMAND="ssh -o ServerAliveInterval=10 -o ConnectTimeout=20"`，避免慢主机上 SSH 超时
+| 项目 | 值 |
+|---|---|
+| 版本 | **v2.3.0** |
+| 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
+| MCP 能力 | **13 个工具** / 4 个提示词 / 8 个资源 |
+| 第三方依赖 | **0**（只用 Node 标准库） |
+| 完整手册 | [`操作使用手册.html`](./操作使用手册.html)（单页 14 章，导航 / 搜索 / 一键复制） |
 
-## 插件一览
+---
 
-| 插件 | 独立仓库（可单独拉取） | 包名 | 版本 | 说明 |
-| --- | --- | --- | --- | --- |
-| 工单面板 | [`Lau-Jin/gongsi-tickets-panel`](https://github.com/Lau-Jin/gongsi-tickets-panel) | `@local/gongsi-tickets-panel` | 1.0.9 | 左侧栏「工单」：列表 / 详情 / 评论 / 记工时 / 分派 / 开始处理 / 关单，另含 4 个 Agent 工具与 2 个技能。原仓 [gitee.com/wumingys/gdcj](https://gitee.com/wumingys/gdcj)（MIT） |
-| 思源桥面板 | [`Lau-Jin/siyuan-bridge`](https://github.com/Lau-Jin/siyuan-bridge) | `dsh-siyuan-bridge` | 0.1.0 | 把 SiYuan 的搜索 / 阅读 / 编辑 / 导出界面嵌进 DSH 主面板（本地自建，MIT） |
-| 免费模型面板 | [`Lau-Jin/our-free-model`](https://github.com/Lau-Jin/our-free-model) | `dsh-our-free-model` | 2.8.0 | 大体积第三方插件（约 30MB，含 wasm / vendor）。上游第三方 MIT：[Ebony-Vinyl/dsh-our-free-model](https://github.com/Ebony-Vinyl/dsh-our-free-model) |
+## 它解决什么问题
 
-三个仓库都是**私有仓库**，通过 SSH 访问；每个仓库的**根目录就是插件包根**（`package.json` 在根上），
-所以一条 `git+ssh://` 安装规格装出来的就是那一个插件。
+DSH 的会话存在 `~/.dsh/sessions/` 下，是**上千个独立 zstd 帧拼接**的 `session.v4.jsonl.zstd`，单文件可达 20 MB。
+想在新会话里回顾旧结论，只能整包解压翻全文——慢，而且极耗 token。
 
-## 安装（每个插件单独拉取）
+本插件把全部会话**预先索引成结构化记忆单元**（会话卡：提问、结论、涉及路径、工具、关键词、血缘），
+之后一次工具调用就能拿到结论速览，用关键词只取命中片段，**不必再把几十 MB 历史灌进上下文**。
 
-```bat
-dsh plugin --profile desktop add "git+ssh://git@github.com:Lau-Jin/gongsi-tickets-panel.git"
-dsh plugin --profile desktop add "git+ssh://git@github.com:Lau-Jin/siyuan-bridge.git"
-dsh plugin --profile desktop add "git+ssh://git@github.com:Lau-Jin/our-free-model.git"
+---
+
+## 安装：从仓库拉取（推荐）
+
+```bash
+git clone git@github.com:Lau-Jin/DSH.git
+cd DSH
 ```
 
-- 用 DSH 自带的插件 CLI（会同时写入 profile 的 `dependencies` 与 `dsh.profile.bundles`）；
-  也可以把同一串 target 粘到 DSH 图形界面的插件管理器里安装。
-- 只装其中一个就行，**不必全装**；各自独立，互不牵连。
-- 本机实测（pnpm 11.28.5）：工单面板 **24 秒**、思源桥面板 **25 秒**，
-  装完 profile 的 `node_modules` 里只出现各自那一个插件，不会顺带拉进别的插件。
-- 换成公开仓库时可把 `git+ssh://git@github.com/` 换成 `git+https://github.com/`。
-- 装完刷新窗口（Ctrl+R）或重启 DSH；侧栏出现对应图标即成功。
+然后：
 
-安装后的首次配置：
+- **Windows**：双击 `install.cmd`
+- **macOS / Linux / Git Bash**：`./install.sh`
 
-- **工单面板**：左侧「工单」→「配置」标签页 → 填自己的 API Key（接口地址默认 `https://yanfa.scedu.tech/api/mcp`）。
-- **思源桥面板**：需要本机 `siyuan-bridge` 服务在 `127.0.0.1:5599` 运行（`siyuan-bridge\start.cmd` 拉起）。
-- **免费模型面板**：装好即用，无需登录 / 注册 / 填 API Key。
+装完即可用。若 DSH 正在运行且工具列表没刷新，**完全退出 DSH 桌面端再打开**一次（最小化无效）。
+之后新会话由文件事件自动识别，**不需要再重启 DSH**。
 
-## 用 tar 包安装（不需要 git / SSH，离线友好）
+### 前置条件
 
-三个包也各自单独打好了，集中存放在 `D:\Google\dsh-plugin-pkg\`（与 Git 仓库分开）：
+1. **Node ≥ 22.15** —— `node -v` 确认。低于此版本没有 `zlib.zstdDecompressSync`，无法解压会话文件。
+2. **Git + GitHub SSH key** —— 私有仓库，`ssh -T git@github.com` 应返回 `Hi <账号>! You've successfully authenticated`。
 
-```bat
-dsh plugin --profile desktop add "file:D:/Google/dsh-plugin-pkg/local-gongsi-tickets-panel-1.0.9.tgz"
-dsh plugin --profile desktop add "file:D:/Google/dsh-plugin-pkg/dsh-siyuan-bridge-0.1.0.tgz"
-dsh plugin --profile desktop add "file:D:/Google/dsh-plugin-pkg/dsh-our-free-model-2.8.0.tgz"
+### 安装脚本做了什么
+
+`install.cmd` / `install.sh` 只是包装，实际调用 `node install.mjs`：
+
+1. 解析可用的 Node（含 zstd 支持校验）
+2. **备份**并写入 `~/.dsh/profiles/desktop/cordis.patch.yml` 中带标记的 MCP 配置块
+3. 安装 Skill 到 `~/.dsh/skills/session-index/SKILL.md`
+4. 自动生成插件包与技能包到 `dist/`
+5. 打印 6 项校验结果
+
+幂等：重复运行不会产生重复条目；**更新后重跑会保留你手工改过的 env 值**（除非显式加 `--reset-env`）。
+
+### 手动方式（可选）
+
+不想用脚本，也可以在 DSH「MCP 与技能」→ MCP 里添加 stdio server：
+
+| 字段 | 值 |
+|---|---|
+| 名称 | `session-index` |
+| command | `node` 的绝对路径 |
+| args | `<仓库目录>/server.mjs` |
+
+---
+
+## 装上之后是自动的
+
+| 行为 | 说明 |
+|---|---|
+| 首次建索引 | server 启动时后台子进程构建，**不阻塞 MCP 握手**；未就绪时工具会提示稍候 |
+| 新会话识别 | `fs.watch` 递归监听 DSH 与 WorkBuddy 会话目录，写入停止约 3.5 秒后增量纳入 |
+| 定时兜底 | 每 60 秒增量刷新，只处理 size/mtime 变化的文件 |
+| 安静期保护 | 已有索引的活跃会话需静止 45 秒才重建，避免反复解压正在写入的大文件 |
+| 客户端通知 | 索引更新后发 `notifications/resources/list_changed`，客户端无需重启即可感知 |
+| 自愈 | 索引缺失或损坏时，下次启动自动重建 |
+
+本机实测（31 个会话）：全量构建 **约 10 秒**、索引 **约 12 MB**（源文件 55 MB+）；
+增量刷新 **约 0.85 秒**，无变化时 **约 30 ms**；新会话从写入到可检索 **约 70 ms**。
+
+---
+
+## 工具速览
+
+推荐调用链：`status → brief → related/thread → search → get`，逐级放大，避免一上来灌全文。
+
+| 工具 | 用途 |
+|---|---|
+| `session_index_status` | 索引与自动维护状态（含监听、下次刷新倒计时） |
+| `session_index_brief` | 跨会话结论速览；带 `query` 只取相关主题 |
+| `session_index_list` | 会话清单（标题 / 时间 / 工作区 / 应用） |
+| `session_index_related` | 相关会话 + 关联理由（共享路径 / 关键词 / 工具 / 血缘 / 同工作区） |
+| `session_index_thread` | 父子血缘链（compact 上游、subagent 下游、同源兄弟） |
+| `session_index_search` | 语义检索，**只返回命中片段**；默认排除系统注入噪声 |
+| `session_index_get` | 先看会话骨架，再按 `seq` 精确取原文 |
+| `session_index_remember` | 写入长期记忆（类型 / 标签 / 重要度） |
+| `session_index_recall` | 召回长期记忆（时间衰减排序） |
+| `session_index_forget` | 归档或删除记忆（默认归档） |
+| `session_index_refresh` | 手动增量刷新 |
+| `session_index_package` | 重新生成分发包 |
+| `session_index_vectors` | 可选的向量索引管理 |
+
+另提供提示词 `session-context` / `resume-topic` / `catch-up` / `quickstart`，
+资源 `session-index://guide`、`://plugin.json`、`://status`、`://brief`、`://memory` 等。
+`initialize` 会返回 `instructions`，客户端不读外部文档也能正确上手。
+
+**搜索模式**：`semantic`（默认，本地同义词扩展 + BM25，零 token）、`keyword`（精确 AND）、
+`hybrid` / `vector`（需配置 embedding，未配置自动降级为本地语义检索）。
+
+---
+
+## 更新 / 校验 / 回滚
+
+```bash
+# Windows
+update.cmd              # git pull + 重装（保留 env 自定义）
+
+# macOS / Linux
+./update.sh
 ```
 
-## 本仓库（`Lau-Jin/DSH`）是什么
-
-插件已经逐个拆到各自的独立仓库，本仓库保留为**汇总与备份**：`packages/` 下留有同一份插件源码，
-仍可用 pnpm 的「git 仓库子目录」写法安装：
-
-```bat
-dsh plugin --profile desktop add "git+ssh://git@github.com:Lau-Jin/DSH.git#path:/packages/gongsi-tickets-panel"
-dsh plugin --profile desktop add "git+ssh://git@github.com:Lau-Jin/DSH.git#path:/packages/siyuan-bridge"
+```bash
+node install.mjs --verify        # 6 项状态校验
+node install.mjs --dry-run       # 预览改动，不写文件
+node install.mjs --uninstall     # 移除配置块与自动装的 Skill（先备份）
+node install.mjs --reset-env     # 用默认值覆盖 env 自定义
+node smoke.mjs                   # 66 项端到端自测
 ```
 
-> `#path:/packages/<目录>` 是 pnpm 的 git 子目录规格（已在本机 11.28.5 验证）。
-> 这种写法只装指定的子目录包，但**仍会克隆整个本仓库**；想只拉一个插件，用上面的独立仓库。
+---
 
-`main` 分支刻意保持轻量（约 3MB）：约 30MB 的 `our-free-model` 已彻底移出，不在本仓库的任何分支或历史里。
+## 分发包（离线 / 无 git 环境）
 
-## 免费模型面板（our-free-model，独立仓库）
+`install.mjs` 每次运行会自动生成：
 
-```bat
-dsh plugin --profile desktop add "git+ssh://git@github.com:Lau-Jin/our-free-model.git"
-```
+| 文件 | 内容 | 用途 |
+|---|---|---|
+| `dist/dsh-session-index-v2.3.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
+| `dist/session-index-skill-v2.3.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
-- 独立仓库的根目录就是插件包根，包名 `dsh-our-free-model`，版本 `2.8.0`。
-- 独立仓库中 `package.json` 的 `repository` / `homepage` / `bugs` 已指向该仓库；
-  上游 Gemini CLI 已公开发布的 installed-app OAuth 客户端 ID/Secret 在源码中改为分段拼接
-  （运行时拼接结果与原文逐字节一致，用户无需任何额外配置），以避免被 GitHub Push Protection 拦截。
-- 单独的 tar 包：`D:\Google\dsh-plugin-pkg\dsh-our-free-model-2.8.0.tgz`（约 28MB），可离线分发。
+包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
+已验证包内无任何会话数据与密钥，可安全分发。也可随时 `node pack.mjs` 重打，或调 MCP 工具 `session_index_package`。
 
-### 为什么单独成库
+---
 
-pnpm 解析 git 依赖时会 fetch 仓库的**全部 refs**。当 `our-free-model` 作为同一仓库的大分支存在时，
-每次安装其它插件也会拉取这 30MB，使安装时间从约 1 分钟增加到约 17 分钟。拆成独立仓库后：
+## 配置项
 
-- 主仓库克隆约 **3MB / 31 秒**
-- 实测 pnpm 安装 `dsh-siyuan-bridge` 从 **1015 秒降到 63 秒**
-- 现在装独立仓库版本只要 **约 25 秒**
+全部通过 MCP 配置块的 `env` 设置（`~/.dsh/profiles/desktop/cordis.patch.yml`）：
 
-> 上游：<https://github.com/Ebony-Vinyl/dsh-our-free-model>（第三方 MIT），包内保留其原始 `LICENSE`、`NOTICE.md`、`README.md`。
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `SESSION_INDEX_AUTO` | `1` | 总开关，`0` 关闭后台自动维护 |
+| `SESSION_INDEX_AUTO_INTERVAL_MS` | `60000` | 定时增量刷新间隔（最小 15000） |
+| `SESSION_INDEX_AUTO_QUIET_MS` | `45000` | 已有会话的静止期（活跃时不重建） |
+| `SESSION_INDEX_WATCH` | `1` | 文件事件监听开关 |
+| `SESSION_INDEX_WATCH_DEBOUNCE_MS` | `3500` | 写入事件防抖 |
+| `SESSION_INDEX_WATCH_QUIET_MS` | `6000` | 监听路径的静止期 |
+| `SESSION_INDEX_APPS` | `all` | 只索引 `dsh` 或 `workbuddy` |
+| `SESSION_INDEX_DIR` | `~/.dsh/session-index` | 索引产物目录 |
+| `SESSION_INDEX_EMBED_URL` / `_MODEL` / `_KEY` | 空 | 可选，OpenAI 兼容 embedding；不配则纯本地 |
 
-## 更新与卸载
+> 改完这些值后**不要加 `--reset-env`**；正常重跑安装会保留它们。
 
-```bat
-:: 只看已装的包有没有新提交，然后重新解析依赖
-dsh plugin --profile desktop update
-
-:: 卸载单个插件（包名见上表）
-dsh plugin --profile desktop remove "@local/gongsi-tickets-panel"
-```
-
-> 卸载后还需要从 profile 的 `package.json` → `dsh.profile.bundles` 里删掉对应包名；
-> 用 DSH 图形界面的插件管理器卸载会自动处理这一步。
+---
 
 ## 目录结构
 
 ```text
-Lau-Jin/gongsi-tickets-panel/   # 工单面板：仓库根即插件包根
-Lau-Jin/siyuan-bridge/          # 思源桥面板：仓库根即插件包根
-Lau-Jin/our-free-model/         # 免费模型面板：仓库根即插件包根（约 30MB）
-Lau-Jin/DSH/                    # 本仓库：汇总 / 备份镜像
-├─ packages/
-│  ├─ gongsi-tickets-panel/
-│  └─ siyuan-bridge/
-└─ README.md
+dsh-session-index/                  # 仓库根 = 插件根
+├── server.mjs                      # MCP stdio server（13 工具 / prompts / resources）
+├── build-index.mjs                 # 索引构建（多帧 zstd → 可检索记录 + 会话卡）
+├── install.mjs                     # 安装 / 校验 / 卸载 / 自动打包
+├── pack.mjs                        # 打包 CLI（零依赖 ZIP writer）
+├── smoke.mjs                       # 66 项端到端自测
+├── install.cmd / install.sh        # 一键安装（双击 / 执行）
+├── update.cmd / update.sh          # 更新（git pull + 重装）
+├── plugin.json                     # 机器可读能力清单（也通过 MCP 资源暴露）
+├── package.json                    # 元信息 + dsh.plugin 声明
+├── 操作使用手册.html                # 自包含单页手册（14 章）
+├── lib/
+│   ├── reader.mjs                  # 多帧 zstd 读取
+│   ├── extract.mjs                 # 事件 → 文本记录（含系统注入降噪）
+│   ├── cards.mjs                   # 会话卡 / 关联度 / 血缘
+│   ├── index-store.mjs             # 分片存储与增量签名
+│   ├── source-workbuddy.mjs        # WorkBuddy 会话适配器
+│   ├── semantic.mjs                # 同义词扩展 + BM25
+│   ├── embedding.mjs               # 可选向量检索
+│   ├── notes.mjs                   # 长期记忆库
+│   ├── auto.mjs                    # 自动建索引 / 定时刷新
+│   ├── watch.mjs                   # 文件事件监听
+│   └── pack.mjs                    # ZIP writer
+├── skill/SKILL.md                  # 自动接入用技能
+└── dist/                           # 自动生成的分发包（git 忽略）
 ```
 
-每个插件包目录里都有 `package.json`（带 `dsh.bundle.patch` 与 `dsh.client` 声明）和
-`cordis.patch.yml`（bundle patch，`insert` 一行插件注册）。
+索引产物写入 `~/.dsh/session-index/`，**与仓库目录分离**，所以换 clone 位置不会丢索引。
 
-## 国内网络提示
+---
 
-直连 HTTPS 不稳时可临时配只读镜像：
+## 隐私与安全
 
-```bat
-git config --global url."https://ghfast.top/https://github.com/".insteadOf "https://github.com/"
+- **源会话只读**：任何操作都不修改 `~/.dsh/sessions/` 与 `~/.workbuddy/projects/` 下的原始文件。
+- **配置写前备份**：每次改 `cordis.patch.yml` 都先复制为 `.bak-<时间戳>`。
+- **不入库**：索引、长期记忆、备份、验证产物均在 `.gitignore` 中排除。
+- **索引含会话原文**：`~/.dsh/session-index/` 是会话全文的本地副本，**不要打包外传**；分发请用 `dist/` 里的 zip（已自动排除）。
+
+---
+
+## 卸载
+
+```bash
+node install.mjs --uninstall
 ```
 
-该镜像仅用于 HTTPS 只读访问，部分 URL 会返回 403，且**推送仍需 SSH**。
+移除配置块与自动安装的 Skill（先备份）。索引目录 `~/.dsh/session-index/` 可保留（不影响原始会话），也可手动删除。
 
-## 来源与许可
+---
 
-- `gongsi-tickets-panel`：来自同事在 Gitee 的仓库（MIT），1.0.9 对应其 `master`。
-- `siyuan-bridge`：本地自建插件（MIT），配套的桥接服务不在这些仓库内。
-- `our-free-model`：第三方 MIT 插件，上游 <https://github.com/Ebony-Vinyl/dsh-our-free-model>。
+## 许可
 
-## 维护说明
-
-- 推送前请确认 `git remote -v` 指向正确的私有仓库。
-- 私有仓库，明文凭据与 API Key 一律不要提交进来。
-- `main` 分支保持轻量：超过 ~10MB 的内容放独立仓库；不要把大插件重新并入本仓库的分支或历史。
-- 插件改动请改各自的独立仓库，本仓库的 `packages/` 只是备份镜像。
-
-## 整理信息
-
-- 整理时间：2026-11-06（首次导出 2026-11-05）
-- 结构：每个插件一个独立私有仓库 + 独立 tar 包（`D:\Google\dsh-plugin-pkg\`）
+MIT

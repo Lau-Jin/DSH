@@ -1,0 +1,17 @@
+# 统一换行，避免 Windows 下 clone 后 .sh 变成 CRLF 导致 Linux/macOS 无法执行
+* text=auto
+
+*.mjs   text eol=lf
+*.js    text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.sh    text eol=lf
+*.html  text eol=lf
+*.yml   text eol=lf
+
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+*.ps1   text eol=crlf
+
+# 二进制
+*.zip   binary

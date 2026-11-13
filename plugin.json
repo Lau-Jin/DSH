@@ -1,0 +1,87 @@
+{
+  "name": "dsh-session-index",
+  "version": "2.3.0",
+  "displayName": {
+    "zh": "全会话索引与跨会话记忆",
+    "en": "Session Index & Cross-Session Memory"
+  },
+  "description": "完全化的 MCP 插件：从 GitHub 仓库拉取后一键安装、自动配置与建索引、文件事件驱动识别新会话（无需重启）、索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。",
+  "keywords": ["dsh", "mcp", "session", "memory", "cross-session", "semantic-search", "auto-watch", "auto-package", "workbuddy", "one-click-install"],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com:Lau-Jin/DSH.git",
+    "install": "git clone git@github.com:Lau-Jin/DSH.git && node install.mjs"
+  },
+  "mcp": {
+    "transport": "stdio",
+    "entry": "server.mjs",
+    "resolvedBy": "install.mjs（自动解析 Node 与绝对路径，基于脚本自身目录，clone 到任意位置均可）",
+    "capabilities": ["tools", "prompts", "resources", "instructions", "listChanged"],
+    "toolCount": 13,
+    "tools": [
+      "session_index_status",
+      "session_index_brief",
+      "session_index_list",
+      "session_index_related",
+      "session_index_thread",
+      "session_index_search",
+      "session_index_get",
+      "session_index_remember",
+      "session_index_recall",
+      "session_index_forget",
+      "session_index_package",
+      "session_index_vectors",
+      "session_index_refresh"
+    ],
+    "prompts": ["session-context", "resume-topic", "catch-up", "quickstart"],
+    "resources": [
+      "session-index://guide",
+      "session-index://plugin.json",
+      "session-index://package",
+      "session-index://brief",
+      "session-index://memory",
+      "session-index://status",
+      "session-index://cards",
+      "session-index://card/{id}"
+    ]
+  },
+  "automatic": {
+    "install": "node install.mjs",
+    "installWindows": "install.cmd（双击）",
+    "verify": "node install.mjs --verify",
+    "uninstall": "node install.mjs --uninstall",
+    "update": "git pull && node install.mjs（保留已有 env 自定义）",
+    "autoIndexOnStart": true,
+    "autoRefresh": true,
+    "refreshIntervalMs": 60000,
+    "activeFileQuietMs": 45000,
+    "watchNewSessions": true,
+    "watchDebounceMs": 3500,
+    "watchQuietMs": 6000,
+    "onDemandFreshCheck": true,
+    "notifyClientOnIndexChange": true,
+    "skillAutoInstall": true,
+    "envCustomPreservedOnReinstall": true,
+    "autoPackage": ["plugin", "skill"]
+  },
+  "packages": {
+    "directory": "dist",
+    "plugin": "dsh-session-index-v2.3.0.zip",
+    "skill": "session-index-skill-v2.3.0.zip",
+    "generator": "lib/pack.mjs (zero dependency ZIP writer)",
+    "contents": ["MANIFEST.json", "INSTALL.md"],
+    "excludes": ["会话索引分片 *.jsonl.gz", "meta/cards/notes/vectors.json", "备份与临时文件", "已有 zip"]
+  },
+  "requirements": {
+    "node": ">=22.15",
+    "os": ["win32", "darwin", "linux"],
+    "sourceDirs": ["~/.dsh/sessions", "~/.workbuddy/projects"]
+  },
+  "safety": {
+    "sourceSessions": "read-only",
+    "writesOnlyTo": "~/.dsh/session-index/ 与 dist/",
+    "configBackup": "install.mjs 写 cordis.patch.yml 前自动备份",
+    "rollback": "node install.mjs --uninstall",
+    "privateData": "索引、长期记忆、备份一律不入库；分发包已自动排除"
+  }
+}

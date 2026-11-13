@@ -1,0 +1,58 @@
+{
+  "name": "dsh-session-index",
+  "version": "2.3.0",
+  "private": true,
+  "type": "module",
+  "description": "完全化的 DSH + WorkBuddy 全会话 MCP 插件：从 GitHub 拉取即装、自动建索引、文件事件驱动识别新会话、MCP 变更通知、自动打包插件与技能。零第三方依赖，源会话只读。",
+  "engines": {
+    "node": ">=22.15"
+  },
+  "bin": {
+    "dsh-session-index": "./server.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com:Lau-Jin/DSH.git"
+  },
+  "homepage": "https://github.com/Lau-Jin/DSH#readme",
+  "bugs": {
+    "url": "https://github.com/Lau-Jin/DSH/issues"
+  },
+  "files": [
+    "*.mjs",
+    "*.json",
+    "*.md",
+    "*.html",
+    "*.cmd",
+    "*.sh",
+    "lib/",
+    "skill/",
+    "dist/*.zip"
+  ],
+  "dsh": {
+    "plugin": {
+      "id": "session-index",
+      "entry": "server.mjs",
+      "manifest": "plugin.json",
+      "install": "node install.mjs",
+      "verify": "node install.mjs --verify",
+      "uninstall": "node install.mjs --uninstall",
+      "package": "node pack.mjs",
+      "mcp": "@deepseek-ai/dsh-mcp-client",
+      "kind": "mcp-stdio-server"
+    }
+  },
+  "scripts": {
+    "setup": "node install.mjs",
+    "verify": "node install.mjs --verify",
+    "uninstall": "node install.mjs --uninstall",
+    "pack": "node pack.mjs",
+    "build": "node build-index.mjs",
+    "rebuild": "node build-index.mjs --force",
+    "refresh": "node build-index.mjs",
+    "serve": "node server.mjs",
+    "smoke": "node smoke.mjs",
+    "check": "node --check server.mjs && node --check build-index.mjs && node --check install.mjs && node --check pack.mjs && node --check smoke.mjs && node --check lib/reader.mjs && node --check lib/extract.mjs && node --check lib/cards.mjs && node --check lib/source-workbuddy.mjs && node --check lib/semantic.mjs && node --check lib/embedding.mjs && node --check lib/notes.mjs && node --check lib/auto.mjs && node --check lib/watch.mjs && node --check lib/pack.mjs && node --check lib/index-store.mjs"
+  },
+  "license": "MIT"
+}

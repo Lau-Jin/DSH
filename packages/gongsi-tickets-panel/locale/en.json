@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Gongsi Tickets Panel",
-    "description": "Browse, filter, and page the tickets of a gongsi MCP server from a left-sidebar panel, and act on them in place: comment (paste a screenshot straight in), book time, assign, start, and complete."
-  }
-}

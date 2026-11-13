@@ -1,6 +1,21 @@
+# 生成物（安装/打包时自动产生，不随仓库分发）
+dist/
+node_modules/
+
+# 索引与长期记忆：含会话全文与个人结论，绝不入库
+meta.json
+cards.json
+notes.json
+vectors.json
+*.jsonl.gz
+
+# 备份与临时文件
+*.bak-*
+*.tmp-*
+*.zip
+
+# 日志与系统文件
 *.log
 .DS_Store
 Thumbs.db
-
-# 已拆到独立仓库 Lau-Jin/our-free-model，防止将来又被误提交进 main
-packages/our-free-model/
+.workbuddy/
