@@ -1,21 +1,37 @@
 {
   "name": "dsh-session-index",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "displayName": {
     "zh": "全会话索引与跨会话记忆",
     "en": "Session Index & Cross-Session Memory"
   },
-  "description": "完全化的 MCP 插件：从 GitHub 仓库拉取后一键安装、自动配置与建索引、文件事件驱动识别新会话（无需重启）、索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。",
-  "keywords": ["dsh", "mcp", "session", "memory", "cross-session", "semantic-search", "auto-watch", "auto-package", "workbuddy", "one-click-install"],
+  "description": "完全化的 DSH 插件：在 DSH 插件页粘贴仓库地址即可安装（bundle 自动挂载，无需改配置、无需命令行），装完自动建索引、文件事件驱动识别新会话（无需重启），索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。",
+  "keywords": ["dsh", "dsh-bundle", "mcp", "session", "memory", "cross-session", "semantic-search", "auto-watch", "auto-package", "workbuddy", "one-click-install"],
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com:Lau-Jin/DSH.git",
-    "install": "git clone git@github.com:Lau-Jin/DSH.git && node install.mjs"
+    "url": "https://github.com/Lau-Jin/DSH.git",
+    "install": "DSH 插件页粘贴 https://github.com/Lau-Jin/DSH 直接安装"
+  },
+  "distribution": {
+    "bundle": {
+      "declared": "package.json → dsh.bundle.patch = ./cordis.patch.yml",
+      "patch": "cordis.patch.yml",
+      "entries": [
+        { "id": "session-index-host", "name": "dsh-session-index", "role": "宿主半身：解析自身安装路径" },
+        { "id": "mcp-session-index", "name": "@deepseek-ai/dsh-mcp-client", "role": "MCP stdio 客户端：暴露工具/prompts/resources" }
+      ],
+      "selfResolving": "两处 !!js 表达式在 DSH 加载配置时求值，安装目录变化无需改文件"
+    },
+    "ways": [
+      { "id": "plugin-page", "label": "DSH 插件页（推荐）", "steps": ["粘贴仓库地址", "安装", "重启 DSH"], "needsCli": false },
+      { "id": "pnpm", "label": "pnpm 全局链接", "steps": ["pnpm add <路径或仓库>", "把 dsh-session-index 加入 profile 的 dsh.profile.bundles", "重启 DSH"] },
+      { "id": "manual", "label": "手工安装（兼容旧方式）", "steps": ["node install.mjs", "重启 DSH"], "writesPatchBlock": true }
+    ]
   },
   "mcp": {
     "transport": "stdio",
     "entry": "server.mjs",
-    "resolvedBy": "install.mjs（自动解析 Node 与绝对路径，基于脚本自身目录，clone 到任意位置均可）",
+    "resolvedBy": "cordis.patch.yml 的 !!js 表达式（按 环境变量 → 宿主记下的路径文件 → profile 标准安装位置 依次探测）",
     "capabilities": ["tools", "prompts", "resources", "instructions", "listChanged"],
     "toolCount": 13,
     "tools": [
@@ -46,11 +62,11 @@
     ]
   },
   "automatic": {
-    "install": "node install.mjs",
+    "install": "node install.mjs（可选，插件页安装时可跳过）",
     "installWindows": "install.cmd（双击）",
     "verify": "node install.mjs --verify",
     "uninstall": "node install.mjs --uninstall",
-    "update": "git pull && node install.mjs（保留已有 env 自定义）",
+    "update": "plugins 页重装，或 git pull && node install.mjs",
     "autoIndexOnStart": true,
     "autoRefresh": true,
     "refreshIntervalMs": 60000,
@@ -66,8 +82,8 @@
   },
   "packages": {
     "directory": "dist",
-    "plugin": "dsh-session-index-v2.3.0.zip",
-    "skill": "session-index-skill-v2.3.0.zip",
+    "plugin": "dsh-session-index-v2.4.0.zip",
+    "skill": "session-index-skill-v2.4.0.zip",
     "generator": "lib/pack.mjs (zero dependency ZIP writer)",
     "contents": ["MANIFEST.json", "INSTALL.md"],
     "excludes": ["会话索引分片 *.jsonl.gz", "meta/cards/notes/vectors.json", "备份与临时文件", "已有 zip"]
@@ -81,7 +97,7 @@
     "sourceSessions": "read-only",
     "writesOnlyTo": "~/.dsh/session-index/ 与 dist/",
     "configBackup": "install.mjs 写 cordis.patch.yml 前自动备份",
-    "rollback": "node install.mjs --uninstall",
+    "rollback": "node install.mjs --uninstall，或插件页禁用/卸载",
     "privateData": "索引、长期记忆、备份一律不入库；分发包已自动排除"
   }
 }

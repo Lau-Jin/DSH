@@ -82,6 +82,8 @@ function resolvePaths(opts, env) {
   return {
     dshHome,
     profile,
+    profileDir,
+    profileManifest: path.join(profileDir, 'package.json'),
     patchFile: path.join(profileDir, 'cordis.patch.yml'),
     indexDir: env.SESSION_INDEX_DIR || path.join(dshHome, 'session-index'),
     skillSrc: path.join(PLUGIN_DIR, 'skill', 'SKILL.md'),
@@ -155,23 +157,68 @@ function readIndexState(indexDir) {
     return { exists: false, sessions: 0, corrupt: true };
   }
 }
+
+/**
+ * 这个插件是不是已经以「DSH bundle」方式装进 profile 了？
+ *
+ * 是的话就不能再往 cordis.patch.yml 写 mcp 行：bundle 的 cordis.patch.yml 已经
+ * insert 了一条同 id（mcp-session-index）的配置，重复会出现两条同 id 行。
+ * 从插件页 / pnpm 安装走的正是这条路径。
+ */
+function bundleRegistered(profileManifest) {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(profileManifest, 'utf8'));
+    const list = pkg?.dsh?.profile?.bundles;
+    return Array.isArray(list) && list.includes('dsh-session-index');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 记录 MCP 入口的绝对路径。
+ *
+ * bundle 方式下 cordis.patch.yml 里的 args 是用 `!!js` 读这个文件的——因为安装位置
+ * 由 pnpm 决定，配置里没法预先写死。宿主半身（lib/index.mjs）每次启动也会刷新它；
+ * 这里提前写一遍，安装完立刻可用（不必等 DSH 重启后的第一次 apply）。
+ */
+function writeServerPathFile(indexDir, serverFile) {
+  const target = path.join(indexDir, 'server-path.txt');
+  fs.mkdirSync(indexDir, { recursive: true });
+  const next = serverFile + '\n';
+  let current = null;
+  try {
+    current = fs.readFileSync(target, 'utf8');
+  } catch {
+    current = null;
+  }
+  if (current === next) return { target, changed: false };
+  fs.writeFileSync(target, next, 'utf8');
+  return { target, changed: true };
+}
+
 function verify(p, nodeBin) {
   const checks = [];
   const add = (name, ok, detail) => checks.push({ name, ok, detail });
   add('插件目录', fs.existsSync(p.serverFile), p.serverFile);
   add('Node >= 22.15 且支持 zstd', hasZstd(nodeBin), nodeBin);
   add('profile 配置文件', fs.existsSync(p.patchFile), p.patchFile);
+  const byBundle = bundleRegistered(p.profileManifest);
   let raw = '';
   try {
     raw = fs.readFileSync(p.patchFile, 'utf8');
   } catch {
     // ignore
   }
-  add('MCP 条目已注册', raw.includes(START) && raw.includes(ID), ID);
+  add(
+    'MCP 条目已注册',
+    byBundle || (raw.includes(START) && raw.includes(ID)),
+    byBundle ? 'bundle 挂载（cordis.patch.yml @ 插件包内）' : ID,
+  );
   add('自动注入 Skill', fs.existsSync(p.skillDest), p.skillDest);
   const idx = readIndexState(p.indexDir);
   add('索引已生成', idx.exists && idx.sessions > 0, `${idx.sessions} 个会话 / ${idx.builtAt || '-'}`);
-  return { ok: checks.every((c) => c.ok), checks, index: idx };
+  return { ok: checks.every((c) => c.ok), checks, index: idx, bundle: byBundle };
 }
 
 function main() {
@@ -179,9 +226,10 @@ function main() {
   const env = process.env;
   const p = resolvePaths(opts, env);
   const node = resolveNode(env);
+  const byBundle = bundleRegistered(p.profileManifest);
   const out = {
     action: opts.verify ? 'verify' : opts.uninstall ? 'uninstall' : opts.dryRun ? 'dry-run' : 'install',
-    pluginDir: PLUGIN_DIR, ...p, nodeBin: node.bin, nodeOk: node.ok, changes: [], backups: [],
+    pluginDir: PLUGIN_DIR, ...p, nodeBin: node.bin, nodeOk: node.ok, bundle: byBundle, changes: [], backups: [],
   };
 
   if (!node.ok) {
@@ -215,7 +263,9 @@ function main() {
   const existingEnv = opts.resetEnv ? {} : parseExistingEnv(original);
   out.preservedEnv = Object.keys(existingEnv);
   const block = buildBlock(p, node.bin, existingEnv);
-  const next = patchText(original, block, opts.uninstall);
+  // bundle 方式：配置由插件包内的 cordis.patch.yml 提供，这里只清理旧的标记块
+  // （从手工安装迁移到插件页安装时会把重复的 mcp 行顺手去掉）。
+  const next = byBundle ? patchText(original, block, true) : patchText(original, block, opts.uninstall);
   const changed = next !== original;
   const skillContent = fs.existsSync(p.skillSrc) ? fs.readFileSync(p.skillSrc, 'utf8') : null;
   const skillSame = fs.existsSync(p.skillDest) && fs.readFileSync(p.skillDest, 'utf8') === skillContent;
@@ -232,12 +282,13 @@ function main() {
     else {
       console.log('【预览】以下改动尚未写入：');
       console.log(`  profile 配置 : ${p.patchFile}`);
+      console.log(`  安装方式     : ${byBundle ? 'bundle（插件包内 cordis.patch.yml 挂载）' : 'patch（写入 cordis.patch.yml 标记块）'}`);
       console.log(`  配置变更     : ${changed ? '有' : '无（已是最新）'}`);
       console.log(`  保留 env     : ${Object.keys(existingEnv).length} 项已有配置${opts.resetEnv ? '（--reset-env：将重置为默认）' : ''}`);
       console.log(`  Skill 安装   : ${skillWillChange ? p.skillDest : '无需变更'}`);
       console.log(`  自动打包     : 安装后生成插件包 + 技能包`);
       console.log(`  Node         : ${node.bin}`);
-      console.log('\n将写入的配置块：\n' + (opts.uninstall ? '(卸载：移除标记块)' : block));
+      console.log('\n将写入的配置块：\n' + (opts.uninstall ? '(卸载：移除标记块)' : byBundle ? '(bundle 模式：不写 profile 配置；若存在旧标记块会被清理)' : block));
     }
     return;
   }
@@ -245,7 +296,14 @@ function main() {
   if (changed) {
     out.backups.push(backup(p.patchFile));
     fs.writeFileSync(p.patchFile, next, 'utf8');
-    out.changes.push(opts.uninstall ? `已移除 ${ID} 配置块` : `已写入 ${ID} 配置块`);
+    if (opts.uninstall) out.changes.push(`已移除 ${ID} 配置块`);
+    else if (byBundle) out.changes.push(`已清理旧的 ${ID} 配置块（配置改由插件包内的 bundle 提供）`);
+    else out.changes.push(`已写入 ${ID} 配置块`);
+  }
+  if (!opts.uninstall) {
+    const sp = writeServerPathFile(p.indexDir, p.serverFile);
+    out.serverPath = sp.target;
+    if (sp.changed) out.changes.push(`已记录 MCP 入口路径: ${sp.target}`);
   }
   if (skillWillChange) {
     if (fs.existsSync(p.skillDest)) out.backups.push(backup(p.skillDest));
@@ -279,9 +337,14 @@ function main() {
     console.log('\n完全退出 DSH 桌面端再打开即生效。索引目录可保留，不影响原始会话。');
   } else {
     console.log('安装完成，之后无需再运行任何命令：');
+    if (byBundle) {
+      console.log('  · 安装方式：DSH bundle（已由插件包内的 cordis.patch.yml 挂载，不写 profile 配置）');
+    } else {
+      console.log('  · 安装方式：patch（已在 profile 的 cordis.patch.yml 写入受限标记块）');
+    }
     for (const c of out.changes.length ? out.changes : ['配置已是最新，无需改动']) console.log('  - ' + c);
     for (const b of out.backups) console.log('  备份: ' + b);
-    if (out.preservedEnv.length) console.log(`  已保留原有 env 自定义: ${out.preservedEnv.join(', ')}`);
+    if (out.preservedEnv.length && !byBundle) console.log(`  已保留原有 env 自定义: ${out.preservedEnv.join(', ')}`);
     if (out.packages?.length) {
       console.log('\n已自动打包（不含任何会话数据/密钥，可直接分发）：');
       for (const pkg of out.packages) {

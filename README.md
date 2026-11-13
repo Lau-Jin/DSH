@@ -5,7 +5,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.3.0** |
+| 版本 | **v2.4.0** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
 | MCP 能力 | **13 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
@@ -23,10 +23,33 @@ DSH 的会话存在 `~/.dsh/sessions/` 下，是**上千个独立 zstd 帧拼接
 
 ---
 
-## 安装：从仓库拉取（推荐）
+## 安装
+
+### 方式 A：DSH 插件页（推荐 · 零命令行）
+
+1. 打开 DSH → **插件页**
+2. 粘贴仓库地址：`https://github.com/Lau-Jin/DSH`
+3. 点安装，按提示**完全退出 DSH 再打开**（最小化无效）
+
+装完就是可用状态，不用改配置、不用跑脚本、不用管 Node 路径。
+
+**它为什么能自己找到入口**——插件包里的 `cordis.patch.yml` 会随 bundle 自动应用，挂两行：
+
+| 行 id | 包 | 作用 |
+|---|---|---|
+| `session-index-host` | `dsh-session-index` | 宿主半身（`lib/index.mjs`）：用 `import.meta.url` 解析**真实安装目录**，把 `server.mjs` 绝对路径写进 `~/.dsh/session-index/server-path.txt` |
+| `mcp-session-index` | `@deepseek-ai/dsh-mcp-client` | MCP stdio 客户端：13 工具 / 4 提示词 / 8 资源 |
+
+那行配置里的 `command`、`args`、`DSH_HOME` 三处都是 `!!js` 表达式，**在 DSH 加载配置时求值**（不是安装时），
+按「显式环境变量 → 宿主记下的路径文件 → profile 标准安装位置」依次探测。
+所以仓库放哪、pnpm 装到哪、换了 Node 版本，都不需要改文件。
+
+宿主行排在前、MCP 行排在后，路径文件先落盘，MCP 侧首次 spawn 就能命中——**一次重启即生效**。
+
+### 方式 B：clone + 一键脚本（想自己控制目录 / 离线分发）
 
 ```bash
-git clone git@github.com:Lau-Jin/DSH.git
+git clone https://github.com/Lau-Jin/DSH.git
 cd DSH
 ```
 
@@ -35,35 +58,40 @@ cd DSH
 - **Windows**：双击 `install.cmd`
 - **macOS / Linux / Git Bash**：`./install.sh`
 
-装完即可用。若 DSH 正在运行且工具列表没刷新，**完全退出 DSH 桌面端再打开**一次（最小化无效）。
-之后新会话由文件事件自动识别，**不需要再重启 DSH**。
+`install.mjs` 会先判断 profile 是否已经以 bundle 方式注册了本插件：
+
+- **已注册**（你从插件页装过）→ 不再写 profile 配置，只把残留的旧配置块清掉，避免出现两条同 id 的 MCP 行；
+- **未注册**（纯 clone 用户）→ 往 `~/.dsh/profiles/desktop/cordis.patch.yml` 写一个带标记的配置块。
+
+两种情况都会：写好 `server-path.txt`、装 Skill、生成可分发包。
+
+### 方式 C：手动加 MCP（不推荐，仅排障用）
+
+DSH「MCP 与技能」→ MCP 里添加 stdio server：
+
+| 字段 | 值 |
+|---|---|
+| 名称 | `session-index` |
+| command | `node` 的绝对路径（需 ≥ 22.15） |
+| args | `<仓库目录>/server.mjs` |
 
 ### 前置条件
 
-1. **Node ≥ 22.15** —— `node -v` 确认。低于此版本没有 `zlib.zstdDecompressSync`，无法解压会话文件。
-2. **Git + GitHub SSH key** —— 私有仓库，`ssh -T git@github.com` 应返回 `Hi <账号>! You've successfully authenticated`。
+1. **Node ≥ 22.15** —— 需要 `zlib.zstdDecompressSync`。插件页安装时会自动挑 DSH 自带的 Node（`~/.dsh/dsh-runtimes/*/dependencies/node`），通常不用你操心。
+2. 方式 B 需要 **Git**；仓库已转公开，无需 SSH key。
 
 ### 安装脚本做了什么
 
 `install.cmd` / `install.sh` 只是包装，实际调用 `node install.mjs`：
 
 1. 解析可用的 Node（含 zstd 支持校验）
-2. **备份**并写入 `~/.dsh/profiles/desktop/cordis.patch.yml` 中带标记的 MCP 配置块
-3. 安装 Skill 到 `~/.dsh/skills/session-index/SKILL.md`
-4. 自动生成插件包与技能包到 `dist/`
-5. 打印 6 项校验结果
+2. 判断安装方式（bundle / patch），必要时**备份**并写入 `cordis.patch.yml` 的标记块
+3. 写 `~/.dsh/session-index/server-path.txt`，记下 MCP 入口绝对路径
+4. 安装 Skill 到 `~/.dsh/skills/session-index/SKILL.md`
+5. 自动生成插件包与技能包到 `dist/`
+6. 打印 6 项校验结果
 
 幂等：重复运行不会产生重复条目；**更新后重跑会保留你手工改过的 env 值**（除非显式加 `--reset-env`）。
-
-### 手动方式（可选）
-
-不想用脚本，也可以在 DSH「MCP 与技能」→ MCP 里添加 stdio server：
-
-| 字段 | 值 |
-|---|---|
-| 名称 | `session-index` |
-| command | `node` 的绝对路径 |
-| args | `<仓库目录>/server.mjs` |
 
 ---
 
@@ -138,8 +166,8 @@ node smoke.mjs                   # 66 项端到端自测
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.3.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
-| `dist/session-index-skill-v2.3.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.4.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
+| `dist/session-index-skill-v2.4.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可随时 `node pack.mjs` 重打，或调 MCP 工具 `session_index_package`。
@@ -148,7 +176,10 @@ node smoke.mjs                   # 66 项端到端自测
 
 ## 配置项
 
-全部通过 MCP 配置块的 `env` 设置（`~/.dsh/profiles/desktop/cordis.patch.yml`）：
+全部通过配置块的 `env` 设置。改哪里取决于安装方式：
+
+- **插件页安装**：改插件包内的 `cordis.patch.yml`（`<profile>/node_modules/dsh-session-index/cordis.patch.yml`），改完重启 DSH；
+- **clone + 脚本**：改 `~/.dsh/profiles/desktop/cordis.patch.yml` 里 `>>> session-index` 标记块内的 `env`，重跑 `node install.mjs` 会保留你写的值。
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
@@ -171,6 +202,7 @@ node smoke.mjs                   # 66 项端到端自测
 ```text
 dsh-session-index/                  # 仓库根 = 插件根
 ├── server.mjs                      # MCP stdio server（13 工具 / prompts / resources）
+├── cordis.patch.yml                # bundle patch：挂宿主行 + MCP 行（含 !!js 自解析路径）
 ├── build-index.mjs                 # 索引构建（多帧 zstd → 可检索记录 + 会话卡）
 ├── install.mjs                     # 安装 / 校验 / 卸载 / 自动打包
 ├── pack.mjs                        # 打包 CLI（零依赖 ZIP writer）
@@ -178,9 +210,10 @@ dsh-session-index/                  # 仓库根 = 插件根
 ├── install.cmd / install.sh        # 一键安装（双击 / 执行）
 ├── update.cmd / update.sh          # 更新（git pull + 重装）
 ├── plugin.json                     # 机器可读能力清单（也通过 MCP 资源暴露）
-├── package.json                    # 元信息 + dsh.plugin 声明
+├── package.json                    # 元信息 + dsh.bundle.patch + dsh.plugin 声明
 ├── 操作使用手册.html                # 自包含单页手册（14 章）
 ├── lib/
+│   ├── index.mjs                   # 宿主半身：解析自身安装路径（ESM，供 bundle 挂载）
 │   ├── reader.mjs                  # 多帧 zstd 读取
 │   ├── extract.mjs                 # 事件 → 文本记录（含系统注入降噪）
 │   ├── cards.mjs                   # 会话卡 / 关联度 / 血缘
@@ -211,11 +244,22 @@ dsh-session-index/                  # 仓库根 = 插件根
 
 ## 卸载
 
-```bash
-node install.mjs --uninstall
-```
+- **插件页安装的**：插件页里禁用或卸载 `dsh-session-index`，重启 DSH 即可（MCP 行随 bundle 一起消失）。
+- **clone + 脚本安装的**：`node install.mjs --uninstall`，移除配置块与自动安装的 Skill（先备份）。
 
-移除配置块与自动安装的 Skill（先备份）。索引目录 `~/.dsh/session-index/` 可保留（不影响原始会话），也可手动删除。
+两种情况下索引目录 `~/.dsh/session-index/` 都保留（不影响原始会话），需要时手动删除。
+
+---
+
+## 变更记录
+
+| 版本 | 变更 |
+|---|---|
+| **v2.4.0** | 支持 **DSH 插件页直接安装**：新增 `dsh.bundle.patch` 声明与 `cordis.patch.yml`（含 `!!js` 自解析表达式），新增宿主半身 `lib/index.mjs`。安装路径由运行时探测，不再依赖手工配置；`install.mjs` 自动识别 bundle 模式，避免与插件页安装重复注册。仓库转公开。 |
+| v2.3.0 | 仓库收敛为单插件，仓库根即插件根；新增 `install.cmd/sh`、`update.cmd/sh`；重装保留手工改过的 env。 |
+| v2.2.0 | 新增文件事件驱动的免重启识别（`fs.watch` + 静止期）、MCP 变更通知。 |
+| v2.1.0 | 新增跨会话关联 / 血缘链 / 长期记忆（`remember` / `recall` / `forget`）。 |
+| v2.0.0 | 从「全文检索」重构为「会话卡 + 结构化速览」。 |
 
 ---
 

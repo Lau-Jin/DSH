@@ -1,0 +1,40 @@
+# dsh-session-index · DSH bundle patch
+#
+# 装上即用：从插件页（或 pnpm add github:/本地目录）安装本包后，DSH 会自动把这一层
+# 应用到插件树上，挂两个行，不需要手工改 cordis.patch.yml：
+#
+#   1. session-index-host — 宿主半身（lib/index.mjs）。它用 import.meta.url 拿到真实
+#      安装目录，把 server.mjs 的绝对路径写到 $DSH_HOME/session-index/server-path.txt；
+#   2. mcp-session-index — MCP stdio 客户端，暴露 session_index_* 工具、prompts、resources。
+#
+# 下面的 !!js 表达式在 DSH 加载配置时求值（不是安装时），所以：
+#   · 插件装在哪个目录都不需要改这个文件；
+#   · 换了 Node、换了 profile 名、换了 DSH_HOME 也能自适应；
+#   · 宿主行排在 mcp 行之前，路径文件先写好，MCP 侧首次 spawn 就能命中。
+#
+# 表达式一律单行、纯双引号、外层 try/catch —— YAML 单引号标量里不能出现单引号，
+# 而且这里抛错会连累整棵插件树，所以任何异常都退化成安全默认值。
+- insert:
+    - id: session-index-host
+      name: 'dsh-session-index'
+      config: {}
+- insert:
+    - id: mcp-session-index
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: session-index
+        transport: stdio
+        # 优先用 DSH 自带的 Node（zstd 必需，>= 22.15）；退化到 Electron 自身，
+        # 靠下面的 ELECTRON_RUN_AS_NODE 以纯 Node 模式跑。真 Node 会忽略这个变量。
+        command: !!js '(function(){try{var g=process.getBuiltinModule;if(typeof g!=="function")return process.execPath;var fs=g("node:fs"),p=g("node:path"),o=g("node:os");var home=process.env.DSH_HOME||p.join(o.homedir(),".dsh");var exe=process.platform==="win32"?"node.exe":"node";var c=[process.env.SESSION_INDEX_NODE,p.join(home,"dsh-runtimes","dsh-primary-runtime","dependencies","node","bin",exe),process.execPath];for(var i=0;i<c.length;i++)if(c[i]&&fs.existsSync(c[i]))return c[i];return process.execPath}catch(e){return process.execPath}})()'
+        args:
+          # 解析顺序：显式 env → 宿主半身记录的路径文件 → profile 里的标准安装位置。
+          - !!js '(function(){try{var g=process.getBuiltinModule;if(typeof g!=="function")return "";var fs=g("node:fs"),p=g("node:path"),o=g("node:os");var home=process.env.DSH_HOME||p.join(o.homedir(),".dsh");var prof=process.env.DSH_PROFILE_DIR||p.join(home,"profiles",process.env.DSH_PROFILE||"desktop");var c=[process.env.SESSION_INDEX_SERVER];var f=p.join(home,"session-index","server-path.txt");try{if(fs.existsSync(f))c.push(fs.readFileSync(f,"utf8").trim())}catch(e){}c.push(p.join(prof,"node_modules","dsh-session-index","server.mjs"));for(var i=0;i<c.length;i++)if(c[i]&&fs.existsSync(c[i]))return c[i];return ""}catch(e){return ""}})()'
+        env:
+          # DSH_* 会被下游清洗掉，所以显式带上，保证索引目录落在同一个地方。
+          DSH_HOME: !!js '(function(){try{return process.env.DSH_HOME||process.getBuiltinModule("node:path").join(process.getBuiltinModule("node:os").homedir(),".dsh")}catch(e){return ""}})()'
+          ELECTRON_RUN_AS_NODE: "1"
+          SESSION_INDEX_AUTO: "1"
+          SESSION_INDEX_AUTO_INTERVAL_MS: "60000"
+          SESSION_INDEX_AUTO_QUIET_MS: "45000"
+          SESSION_INDEX_WATCH: "1"

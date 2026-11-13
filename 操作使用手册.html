@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dsh-session-index 操作使用手册 v2.3.0</title>
+<title>dsh-session-index 操作使用手册 v2.4.0</title>
 <style>
   :root{
     --bg:#f7f9fc; --panel:#ffffff; --panel-2:#f1f5fb; --line:#e2e8f2;
@@ -74,12 +74,12 @@
 <body>
 <div class="layout">
 <aside>
-  <div class="brand">dsh-session-index<small>操作使用手册 · v2.3.0</small></div>
+  <div class="brand">dsh-session-index<small>操作使用手册 · v2.4.0</small></div>
   <input id="q" type="search" placeholder="筛选章节 / 关键词…" autocomplete="off">
   <nav id="nav">
     <div class="grp">开始</div>
     <a href="#s1">1. 这是什么</a>
-    <a href="#s2">2. 从仓库拉取安装</a>
+    <a href="#s2">2. 安装（插件页 / 脚本）</a>
     <a href="#s3">3. 新会话免重启识别</a>
     <a href="#s4">4. 完全化插件与自动打包</a>
     <div class="grp">能力</div>
@@ -102,7 +102,7 @@
   <h1>dsh-session-index 操作使用手册</h1>
   <p>完全化的 MCP 插件：一条命令安装，之后自动配置、自动建索引、<b>新会话由文件事件自动识别（无需重启 DSH）</b>、索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。</p>
   <div class="badges">
-    <span class="badge">版本 <b>v2.3.0</b></span>
+    <span class="badge">版本 <b>v2.4.0</b></span>
     <span class="badge">安装命令 <b>1 条</b></span>
     <span class="badge">会话 <b>32</b>（自动增长）</span>
     <span class="badge">工具 <b>13</b> / 提示词 <b>4</b> / 资源 <b>7+1</b></span>
@@ -127,20 +127,38 @@ WorkBuddy  ~/.workbuddy/projects/&lt;工作区&gt;/&lt;会话id&gt;.jsonl
   <div class="tip"><b>关键收益：</b>原始会话约 55 MB 且分帧压缩，直接读要反复解压。建一次索引约 10 秒，之后新会话由事件驱动约数十毫秒纳入；查询只读派生索引并返回片段，不重复读源文件。</div>
 </section>
 
-<section id="s2" data-kw="安装 快速开始 上手 github clone 拉取 仓库 install setup 双击 cmd sh 命令">
-  <h2>2. 从 GitHub 仓库拉取安装（只需一次）</h2>
-  <p>仓库 <code>Lau-Jin/DSH</code> 的<b>根目录就是插件根</b>，拉下来就能装，不需要子目录、不需要解压、不需要改路径。</p>
-<pre><button class="copy">复制</button><code>git clone git@github.com:Lau-Jin/DSH.git
+<section id="s2" data-kw="安装 快速开始 上手 github clone 拉取 仓库 install setup 双击 cmd sh 命令 插件页 bundle 仓库地址 pnpm 一键">
+  <h2>2. 安装（只需一次）</h2>
+  <p>仓库 <code>Lau-Jin/DSH</code> 已转为<b>公开仓库</b>，<b>根目录就是插件根</b>，且已声明 <code>dsh.bundle.patch</code>，所以有三种装法。日常推荐第一种：不碰命令行。</p>
+
+  <h3>方式 A：DSH 插件页（推荐 · 零命令行）</h3>
+  <pre><button class="copy">复制</button><code>仓库地址：https://github.com/Lau-Jin/DSH</code></pre>
+  <p>打开 DSH → 插件页 → 粘贴上面的地址 → 点安装 → 按提示<b>完全退出 DSH 再打开</b>。装完即可用，不用改配置、不用跑脚本。</p>
+  <p>插件包里的 <code>cordis.patch.yml</code> 会随 bundle 自动应用，挂两行：</p>
+  <table>
+    <tr><th>行 id</th><th>包</th><th>作用</th></tr>
+    <tr><td><code>session-index-host</code></td><td><code>dsh-session-index</code></td><td>宿主半身 <code>lib/index.mjs</code>：用 <code>import.meta.url</code> 拿到<b>真实安装目录</b>，把 <code>server.mjs</code> 绝对路径写进 <code>~/.dsh/session-index/server-path.txt</code></td></tr>
+    <tr><td><code>mcp-session-index</code></td><td><code>@deepseek-ai/dsh-mcp-client</code></td><td>MCP stdio 客户端：13 工具 / 4 提示词 / 8 资源</td></tr>
+  </table>
+  <div class="note"><b>为什么它自己认得路径？</b><code>cordis.patch.yml</code> 里的 <code>command</code>、<code>args</code>、<code>DSH_HOME</code> 三处都是 <code>!!js</code> 表达式，在 DSH <b>加载配置时求值</b>（不是安装时），按「显式环境变量 → 宿主记下的路径文件 → profile 标准安装位置」依次探测。宿主行排在 MCP 行之前，路径文件先落盘，MCP 首次 spawn 就能命中——<b>一次重启即生效</b>。</div>
+
+  <h3>方式 B：clone + 一键脚本（想自己控制目录 / 离线分发）</h3>
+<pre><button class="copy">复制</button><code>git clone https://github.com/Lau-Jin/DSH.git
 cd DSH
 install.cmd          # Windows 可直接双击；macOS / Linux / Git Bash 用 ./install.sh</code></pre>
-  <p>这两个脚本只是包装，实际执行 <code>node install.mjs</code>，自动完成：解析 Node ≥ 22.15 → 备份并幂等写入 MCP 配置段 → 安装 Skill → 开启自动维护 → <b>生成插件包与技能包</b> → 打印 6 项校验。</p>
+  <p>脚本只是包装，实际执行 <code>node install.mjs</code>。它会先判断 profile 是否已以 bundle 方式注册了本插件：</p>
+  <ul>
+    <li><b>已注册</b>（你从插件页装过）→ 不写 profile 配置，只清掉残留旧配置块，避免出现两条同 id 的 MCP 行；</li>
+    <li><b>未注册</b>（纯 clone 用户）→ 备份并幂等写入 <code>~/.dsh/profiles/desktop/cordis.patch.yml</code> 的标记块。</li>
+  </ul>
+  <p>两种情况都会：写 <code>server-path.txt</code> → 装 Skill → 开启自动维护 → <b>生成插件包与技能包</b> → 打印 6 项校验。</p>
   <div class="note">若 DSH 正在运行且工具列表未刷新，<b>完全退出 DSH 桌面端再打开</b>（最小化无效）。之后日常使用<b>不需要任何命令行</b>，新会话也无需重启。</div>
 
   <h3>前置条件</h3>
   <table>
     <tr><th>条件</th><th>说明</th></tr>
-    <tr><td>Node.js ≥ 22.15</td><td><code>node -v</code> 确认。低于此版本没有 <code>zlib.zstdDecompressSync</code>，无法解压会话文件</td></tr>
-    <tr><td>Git + GitHub SSH key</td><td>私有仓库，<code>ssh -T git@github.com</code> 应返回 <code>Hi &lt;账号&gt;! You've successfully authenticated</code></td></tr>
+    <tr><td>Node.js ≥ 22.15</td><td>需要 <code>zlib.zstdDecompressSync</code>。方式 A 会自动挑 DSH 自带的 Node（<code>~/.dsh/dsh-runtimes/*/dependencies/node</code>），通常不用操心</td></tr>
+    <tr><td>Git</td><td>仅方式 B 需要。仓库已公开，<b>不再需要 SSH key</b></td></tr>
   </table>
 
   <h3>常用命令</h3>
@@ -148,7 +166,7 @@ install.cmd          # Windows 可直接双击；macOS / Linux / Git Bash 用 ./
     <tr><th>命令</th><th>用途</th></tr>
     <tr><td><code>install.cmd</code> / <code>node install.mjs</code></td><td>安装（幂等，更新后重跑也安全）</td></tr>
     <tr><td><code>update.cmd</code> / <code>./update.sh</code></td><td><code>git pull</code> 后重装，<b>保留手工改过的 env</b></td></tr>
-    <tr><td><code>node install.mjs --dry-run</code></td><td>预览改动，不写文件</td></tr>
+    <tr><td><code>node install.mjs --dry-run</code></td><td>预览改动，不写文件（会显示当前是 bundle 还是 patch 方式）</td></tr>
     <tr><td><code>node install.mjs --verify</code></td><td>校验配置、Node、Skill、索引（6 项）</td></tr>
     <tr><td><code>node install.mjs --uninstall</code></td><td>一键回滚，保留备份</td></tr>
     <tr><td><code>node install.mjs --reset-env</code></td><td>用默认值覆盖 env 自定义</td></tr>
@@ -157,24 +175,24 @@ install.cmd          # Windows 可直接双击；macOS / Linux / Git Bash 用 ./
   </table>
 
   <h3>换机器 / 换目录</h3>
-  <p>索引产物固定在 <code>~/.dsh/session-index</code>，与代码目录分离。因此把仓库 clone 到任意位置再跑一次安装即可，历史索引不会丢；安装器只改指向的 <code>server.mjs</code> 绝对路径。</p>
+  <p>索引产物固定在 <code>~/.dsh/session-index</code>，与代码目录分离。因此把仓库 clone 到任意位置再跑一次安装即可，历史索引不会丢。插件页安装更省事：路径由运行时探测，换目录后重启就自动跟上。</p>
 
-  <details><summary>手动备选：面板添加 / 手写 YAML（一般不用）</summary>
+  <details><summary>手动备选：直接写配置（一般不用，仅排障）</summary>
 <pre><button class="copy">复制</button><code>- id: mcp-session-index
   name: '@deepseek-ai/dsh-mcp-client'
   config:
     serverName: session-index
     transport: stdio
-    command: 'C:\Program Files\nodejs\node.exe'
+    command: 'C:\Users\你\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe'
     args: [ 'D:\DSH\server.mjs' ]
     env: {}</code></pre>
-    <p>install.mjs 生成的版本还写入 <code>DSH_HOME</code>、<code>SESSION_INDEX_DIR</code> 与自动维护开关，更稳妥。Windows 路径必须放 YAML 单引号里。</p>
+    <p>手写时 <code>command</code> 必须是<b>真正的 node.exe</b>，不能填 Electron 主程序（<code>DeepSeek Harness.exe</code>）。Windows 路径放进 YAML 单引号里。方式 A / B 已自动处理这些。</p>
   </details>
 </section>
 
 <section id="s3" data-kw="新会话 自动识别 事件驱动 fs.watch 免重启 通知 listChanged">
   <h2>3. 新会话免重启识别</h2>
-  <p>这是 v2.2.0 引入、v2.3.0 沿用的核心能力：<b>新会话产生后不需要重启 DSH，也不需要等定时轮询</b>。</p>
+  <p>这是 v2.2.0 引入、v2.4.0 沿用的核心能力：<b>新会话产生后不需要重启 DSH，也不需要等定时轮询</b>。</p>
   <div class="grid">
     <div class="card"><b>文件事件监听</b><code>fs.watch(recursive)</code> 监听 DSH 与 WorkBuddy 会话目录，写入事件防抖 3.5 秒后触发后台增量构建。</div>
     <div class="card"><b>全新会话立即纳入</b>静止期只作用于「已有索引且正在写入」的旧会话；新会话第一次发现就建索引，避免被永久跳过。</div>
@@ -199,7 +217,10 @@ install.cmd          # Windows 可直接双击；macOS / Linux / Git Bash 用 ./
   <h3>插件形态</h3>
   <table>
     <tr><th>文件 / 机制</th><th>作用</th></tr>
-    <tr><td><code>plugin.json</code></td><td>机器可读清单：13 工具、4 prompts、7 resources、自动化配置、包信息、依赖与安全声明；也通过 <code>session-index://plugin.json</code> 暴露</td></tr>
+    <tr><td><code>plugin.json</code></td><td>机器可读清单：13 工具、4 prompts、7 resources、自动化配置、包信息、安装方式、依赖与安全声明；也通过 <code>session-index://plugin.json</code> 暴露</td></tr>
+    <tr><td><code>package.json</code> 的 <code>dsh.bundle.patch</code></td><td><b>插件页安装的关键</b>：声明 <code>./cordis.patch.yml</code>，DSH 安装器据此接受本包并在启动时自动应用这层 patch</td></tr>
+    <tr><td><code>cordis.patch.yml</code></td><td>bundle 层：insert 宿主行 + MCP 行；<code>command</code>/<code>args</code>/<code>DSH_HOME</code> 用 <code>!!js</code> 表达式在加载时求值，安装路径变化无需改文件</td></tr>
+    <tr><td><code>lib/index.mjs</code></td><td>宿主半身：<code>import.meta.url</code> 是唯一 100% 可靠的安装路径来源，把 <code>server.mjs</code> 绝对路径写进 <code>server-path.txt</code>，供上面那行 MCP 配置使用</td></tr>
     <tr><td><code>package.json</code> 的 <code>dsh.plugin</code></td><td>DSH 插件元信息：id、entry、install/verify/uninstall/package 命令</td></tr>
     <tr><td><code>initialize.instructions</code></td><td>握手即返回使用约定，客户端无需外部文档</td></tr>
     <tr><td><code>SKILL.md</code></td><td>自动安装到 <code>~/.dsh/skills/session-index/</code>，客户端不支持 prompts/resources 时兜底</td></tr>
@@ -215,8 +236,8 @@ node pack.mjs verify         # 校验 zip 结构
 session_index_package { "mode": "all" }   # MCP 工具，Agent 也能触发</code></pre>
   <table>
     <tr><th>包</th><th>内容</th><th>用途</th></tr>
-    <tr><td><code>dsh-session-index-v2.3.0.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + 一键脚本 + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
-    <tr><td><code>session-index-skill-v2.3.0.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
+    <tr><td><code>dsh-session-index-v2.4.0.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + 一键脚本 + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
+    <tr><td><code>session-index-skill-v2.4.0.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
   </table>
   <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方解压后运行 <code>node install.mjs</code> 即完成安装。</div>
 </section>
@@ -410,18 +431,20 @@ session_index_refresh                       // 仅改规则或需即时生效时
 <pre><button class="copy">复制</button><code>DSH/                        ← 仓库根 = 插件根（git clone 下来直接装）
 ├── install.cmd / install.sh    一键安装（Windows 双击 / 跨平台执行）
 ├── update.cmd / update.sh      更新：git pull + 重装（保留 env 自定义）
-├── install.mjs             安装 / 校验 / 回滚 / 自动打包
+├── install.mjs             安装 / 校验 / 回滚 / 自动打包（自动识别 bundle / patch 方式）
 ├── pack.mjs                打包 CLI
 ├── server.mjs              MCP 服务：13 工具 + 4 prompts + resources + 通知
+├── cordis.patch.yml        bundle 层：挂宿主行 + MCP 行（!!js 自解析命令与路径）
 ├── build-index.mjs         多源增量构建器（--quiet 静止期）
 ├── smoke.mjs               66 项端到端自测
-├── plugin.json             机器可读插件能力清单（含仓库安装信息）
-├── package.json            v2.3.0 / dsh.plugin / repository / 脚本
+├── plugin.json             机器可读插件能力清单（含安装方式与仓库信息）
+├── package.json            v2.4.0 / dsh.bundle.patch / dsh.plugin / 脚本
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能
 ├── dist/                   自动生成的插件包 / 技能包（git 忽略）
 └── lib/
+    ├── index.mjs           宿主半身：解析自身安装路径（供 bundle 挂载）
     ├── auto.mjs            自动索引守护（定时 + 即时检查 + 通知回调）
     ├── watch.mjs           fs.watch 事件驱动识别新会话
     ├── pack.mjs            零依赖 ZIP writer + 清单
@@ -433,14 +456,17 @@ session_index_refresh                       // 仅改规则或需即时生效时
     ├── embedding.mjs       可选向量嵌入与缓存
     ├── notes.mjs           长期记忆库
     └── index-store.mjs     各类 JSON 文档与分片读写</code></pre>
-  <h3>验证记录（2026-11-13，v2.3.0）</h3>
+  <h3>验证记录（2026-11-13，v2.4.0）</h3>
   <table>
     <tr><th>项</th><th>结果</th></tr>
+    <tr><td>bundle patch 语法与求值</td><td>用 DSH 自带的 js-yaml 复刻 <code>!!js</code> 标量 + cordis 的 <code>with (ctx) { eval(expr) }</code> 求值链：YAML 解析通过、2 个 insert 条目正确、<code>command</code> 解析到 DSH 自带 node（v24.21.0，含 zstd）</td></tr>
+    <tr><td>路径自解析</td><td>模拟 <code>&lt;profile&gt;/node_modules/dsh-session-index</code> 安装位置后，<code>args</code> 正确解析为该目录下的 <code>server.mjs</code>；无该目录时返回空串（此时插件本就没装，不影响他人）</td></tr>
+    <tr><td>宿主半身</td><td><code>apply()</code> 正确写出 <code>server-path.txt</code>，内容指向真实 <code>server.mjs</code> 且该文件存在；重复调用内容不变则不写盘</td></tr>
+    <tr><td>bundle / patch 共存</td><td>mock profile 里放旧标记块 + 注册 bundle → <code>install.mjs</code> 识别为 bundle 方式，清理旧块、保留其它配置、写 <code>server-path.txt</code>、装 Skill、打包，全程有备份</td></tr>
     <tr><td>仓库拉取安装</td><td>干净 clone 到全新目录 → <code>install.mjs</code> 用独立 profile 完成安装 → <code>--verify</code> 通过；配置指向 clone 目录，索引沿用 <code>~/.dsh/session-index</code></td></tr>
     <tr><td>重装保留配置</td><td>重复安装显示「保留 env 6 项」，配置块无变更、不产生重复条目；<code>--reset-env</code> 可显式重置</td></tr>
-    <tr><td>一键安装</td><td><code>--dry-run</code> 预览、实际安装（含备份）、<code>--verify</code> 6/6 通过</td></tr>
     <tr><td>新会话免重启</td><td>临时目录写入新会话 → <code>fs-event</code> → 重建 1 个 / 70ms → 通知 → <code>list</code>/<code>search</code> 立即可查；默认静止期 6000 下同样通过</td></tr>
-    <tr><td>自动打包</td><td>插件包含脚本与文档，技能包 3 文件；系统 <code>Expand-Archive</code> 解压成功，0 敏感文件，CRC 与中央目录有效</td></tr>
+    <tr><td>自动打包</td><td>插件包 29 文件（含 <code>cordis.patch.yml</code> 与 <code>lib/index.mjs</code>），技能包 3 文件；系统 <code>Expand-Archive</code> 解压成功，0 敏感文件，CRC 与中央目录有效</td></tr>
     <tr><td>全量冒烟</td><td><b>66/66 通过</b>；全量语法检查通过；手册自包含 14 章</td></tr>
   </table>
   <h3>版本演进</h3>
@@ -449,10 +475,11 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <li><b>v2.1.0</b> 装上即用：一键安装、自动建索引与定时刷新、MCP 自描述。</li>
     <li><b>v2.2.0</b> 完全化插件：文件事件驱动识别新会话（免重启）、索引变更主动通知、自动打包插件与技能包（13 工具）。</li>
     <li><b>v2.3.0</b> 仓库化分发：<code>Lau-Jin/DSH</code> 只存本插件、仓库根即插件根，新增 <code>install.cmd/sh</code> 与 <code>update.cmd/sh</code> 一键入口；重装自动保留手工改过的 env。</li>
+    <li><b>v2.4.0</b> <b>插件页直接安装</b>：声明 <code>dsh.bundle.patch</code> + 新增 <code>cordis.patch.yml</code>（<code>!!js</code> 自解析命令与路径）+ 新增宿主半身 <code>lib/index.mjs</code>；装到哪都不用改配置，一次重启生效。仓库转公开。<code>install.mjs</code> 自动识别 bundle 模式，避免重复注册。</li>
   </ul>
 </section>
 
-<footer>dsh-session-index v2.3.0 · 操作使用手册 · 生成于 2026-11-13 · 零第三方依赖</footer>
+<footer>dsh-session-index v2.4.0 · 操作使用手册 · 生成于 2026-11-13 · 零第三方依赖</footer>
 </main>
 </div>
 <script>

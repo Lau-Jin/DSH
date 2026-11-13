@@ -15,7 +15,7 @@ if [ -d "$PLUGIN_DIR/.git" ]; then
   echo "[1/3] 拉取最新代码..."
   if ! git pull --ff-only; then
     echo
-    echo "[警告] git pull 失败（网络或 SSH key 问题），继续用当前版本重装。"
+    echo "[警告] git pull 失败（网络或认证问题），继续用当前版本重装。"
   fi
 else
   echo "[跳过] 当前目录不是 git 仓库（可能是解压安装的 zip）。"

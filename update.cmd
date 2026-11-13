@@ -23,7 +23,7 @@ echo [1/3] Pulling latest code...
 git -C "%PLUGIN_DIR%" pull --ff-only
 if errorlevel 1 (
   echo.
-  echo [WARN] git pull failed ^(network or SSH key^), reinstalling current version.
+  echo [WARN] git pull failed ^(network or auth^), reinstalling current version.
 )
 
 :reinstall
