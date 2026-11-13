@@ -5,7 +5,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.4.0** |
+| 版本 | **v2.4.1** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
 | MCP 能力 | **13 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
@@ -95,6 +95,48 @@ DSH「MCP 与技能」→ MCP 里添加 stdio server：
 
 ---
 
+## 插件页装不上？先跑环境体检
+
+DSH 插件页装任何东西，底层都是一次 `pnpm install`。装不上时提示常常被归类成
+「没有写入权限，无法安装」，但**真实原因通常在 pnpm 那一步**。装上本插件后可以直接体检：
+
+```bash
+node install.mjs --doctor
+```
+
+七项检查，每项给出结论与修法（只读，不改任何文件）：
+
+| 检查 | 会导致的现象 |
+|---|---|
+| Node 支持 zstd | 索引建不起来 |
+| git 全局 URL 重写 | 走第三方镜像时 codeload 返回 403 / 认证失败 |
+| pnpm `fetch-timeout` | 超过 60000 会让 pnpm 11 直接抛 `UND_ERR_INVALID_ARG`，**所有安装失败** |
+| 远端 git 依赖 | 每次安装都要重下，大仓库必然超时 |
+| lockfile 残留 `git+ssh` | 仓库已删或缺 SSH key 时必失败 |
+| bundle 是否注册 | 插件没被 DSH 加载 |
+| 索引状态 | 装完但没建索引 |
+
+### 三个已确认的坑
+
+1. **`fetch-timeout` 有硬上限。** pnpm 11.28 + undici 在 `fetch-timeout > 60000` 时直接报
+   `UND_ERR_INVALID_ARG`（实测 60000 正常、65000 就失败）。调大超时不仅没用，还会让所有安装全挂。
+2. **大 tarball 装不完。** GitHub 直连在本机约 70–350 KB/s，28 MB 的包需要数分钟，
+   永远超不过 60 秒上限，于是 `UND_ERR_DESTROYED` 反复重试直到失败。
+   正解不是调超时，而是**把这类依赖本地化**：复制到本地目录，依赖写成 `link:`，
+   之后安装完全离线（实测整份 profile 8 秒装完）。
+3. **`insteadOf` 镜像规则会连坐。** `url.https://<镜像>/https://github.com/.insteadOf`
+   会重写所有 GitHub HTTPS 地址，而镜像一般不代理 `codeload.github.com`（返回 403）。
+   直连可用时建议去掉：
+   ```bash
+   git config --global --get-regexp "url\..*\.insteadof"     # 先看有没有
+   git config --global --unset-all "url.https://<镜像前缀>.insteadOf"
+   ```
+
+> 本次修复的完整做法（复制包 → `link:` → 离线重建 lockfile）见
+> `操作使用手册.html` 第 13 章「排障」。
+
+---
+
 ## 装上之后是自动的
 
 | 行为 | 说明 |
@@ -151,6 +193,7 @@ update.cmd              # git pull + 重装（保留 env 自定义）
 ```
 
 ```bash
+node install.mjs --doctor        # 环境体检（7 项，装不上时先跑这个）
 node install.mjs --verify        # 6 项状态校验
 node install.mjs --dry-run       # 预览改动，不写文件
 node install.mjs --uninstall     # 移除配置块与自动装的 Skill（先备份）
@@ -166,8 +209,8 @@ node smoke.mjs                   # 66 项端到端自测
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.4.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
-| `dist/session-index-skill-v2.4.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.4.1.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
+| `dist/session-index-skill-v2.4.1.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可随时 `node pack.mjs` 重打，或调 MCP 工具 `session_index_package`。
@@ -255,6 +298,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 
 | 版本 | 变更 |
 |---|---|
+| **v2.4.1** | 新增 `install.mjs --doctor` **环境体检**（7 项，只读），覆盖插件页安装失败的四个真实成因：git URL 重写镜像、pnpm `fetch-timeout` 超上限、远端大 tarball、lockfile 残留 `git+ssh`。README 增加「插件页装不上」排障章节。 |
 | **v2.4.0** | 支持 **DSH 插件页直接安装**：新增 `dsh.bundle.patch` 声明与 `cordis.patch.yml`（含 `!!js` 自解析表达式），新增宿主半身 `lib/index.mjs`。安装路径由运行时探测，不再依赖手工配置；`install.mjs` 自动识别 bundle 模式，避免与插件页安装重复注册。仓库转公开。 |
 | v2.3.0 | 仓库收敛为单插件，仓库根即插件根；新增 `install.cmd/sh`、`update.cmd/sh`；重装保留手工改过的 env。 |
 | v2.2.0 | 新增文件事件驱动的免重启识别（`fs.watch` + 静止期）、MCP 变更通知。 |

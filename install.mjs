@@ -11,6 +11,7 @@
  *   node install.mjs                 安装（幂等，重复运行安全）
  *   node install.mjs --dry-run      预览将要做的改动，不写任何文件
  *   node install.mjs --verify       校验当前安装状态
+ *   node install.mjs --doctor       体检环境（插件页装不上时先跑这个，只读）
  *   node install.mjs --uninstall    卸载（移除标记块与自动安装的 Skill，可回滚）
  *   node install.mjs --reset-env    用默认值覆盖已有的 env 自定义配置
  *   node install.mjs --profile web  指定 profile，默认 desktop
@@ -36,7 +37,7 @@ const END = '# <<< session-index <<<';
 const ID = 'mcp-session-index';
 
 function parseArgs(argv) {
-  const o = { dryRun: false, verify: false, uninstall: false, json: false, profile: '', resetEnv: false };
+  const o = { dryRun: false, verify: false, uninstall: false, json: false, profile: '', resetEnv: false, doctor: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') o.dryRun = true;
@@ -44,6 +45,7 @@ function parseArgs(argv) {
     else if (a === '--uninstall') o.uninstall = true;
     else if (a === '--json') o.json = true;
     else if (a === '--reset-env') o.resetEnv = true;
+    else if (a === '--doctor') o.doctor = true;
     else if (a === '--profile' && argv[i + 1]) o.profile = argv[++i];
   }
   return o;
@@ -221,6 +223,105 @@ function verify(p, nodeBin) {
   return { ok: checks.every((c) => c.ok), checks, index: idx, bundle: byBundle };
 }
 
+/**
+ * 环境体检（只读，不写任何文件）。
+ *
+ * 针对「DSH 插件页输入仓库地址装不上」的典型成因逐项检查：
+ *   1. git 全局 insteadOf 把 GitHub 重写到第三方镜像（镜像返回 403 / 认证失败）
+ *   2. profile 的 .npmrc 里 fetch-timeout > 60000（pnpm 11 + undici 会直接 INVALID_ARG）
+ *   3. profile 依赖里还有远端 git 包 / 大 tarball（每次安装都要重下，易超时）
+ *   4. pnpm-lock.yaml 里残留 git+ssh 记录（仓库已删/无 SSH key 时必失败）
+ */
+function doctor(p, nodeBin) {
+  const rows = [];
+  const add = (level, name, detail, hint) => rows.push({ level, name, detail, hint });
+
+  // 1. Node
+  add(nodeBin && hasZstd(nodeBin) ? 'ok' : 'fail', 'Node 支持 zstd', nodeBin || '(未找到)',
+    '需 Node >= 22.15；可用 SESSION_INDEX_NODE 指定');
+
+  // 2. git insteadOf 代理规则
+  const gc = spawnSync('git', ['config', '--global', '--get-regexp', 'url\\..*\\.insteadof'], { encoding: 'utf8', timeout: 8000 });
+  const rules = String(gc.stdout || '').trim();
+  if (gc.status === 0 && rules) {
+    const lines = rules.split(/\r?\n/).filter(Boolean);
+    const proxied = lines.filter((l) => !/=\s*https?:\/\/github\.com\/?$/i.test(l));
+    if (proxied.length) {
+      add('warn', 'git 全局 URL 重写', proxied.join(' | '),
+        '镜像对 codeload 常返回 403。直连可用时执行：git config --global --unset-all "url.<镜像前缀>.insteadOf"');
+    } else {
+      add('ok', 'git 全局 URL 重写', '仅等价重写', '');
+    }
+  } else {
+    add('ok', 'git 全局 URL 重写', '无（直连 GitHub）', '');
+  }
+
+  // 3. profile .npmrc 的 fetch-timeout
+  const npmrcFile = path.join(p.profileDir, '.npmrc');
+  let npmrc = '';
+  try {
+    npmrc = fs.readFileSync(npmrcFile, 'utf8');
+  } catch {
+    // 没配是正常的
+  }
+  const ft = /^\s*fetch-timeout\s*=\s*(\d+)\s*$/m.exec(npmrc);
+  if (ft && Number(ft[1]) > 60000) {
+    add('fail', 'pnpm fetch-timeout', `${ft[1]} ms（> 60000）`,
+      'pnpm 11 + undici 在该值超过 60000 时会抛 UND_ERR_INVALID_ARG，导致所有安装失败；请删除该行');
+  } else {
+    add('ok', 'pnpm fetch-timeout', ft ? `${ft[1]} ms` : '默认 60000 ms', '');
+  }
+
+  // 4. profile 依赖中的远端包
+  let manifest = null;
+  try {
+    manifest = JSON.parse(fs.readFileSync(p.profileManifest, 'utf8'));
+  } catch {
+    // 下面统一报
+  }
+  if (!manifest) {
+    add('fail', 'profile package.json', '读取失败', p.profileManifest);
+  } else {
+    const deps = manifest.dependencies || {};
+    const remote = Object.entries(deps).filter(([, v]) => /^(github:|git\+|git:|https?:\/\/|git@)/i.test(String(v)));
+    if (remote.length) {
+      add('warn', '远端 git 依赖', remote.map(([k, v]) => `${k} (${String(v).slice(0, 48)})`).join(' | '),
+        '每次安装都要重新下载，大仓库会超时。建议复制到本地后用 link: 指向，例如 "pkg": "link:D:\\\\tools\\\\pkg"');
+    } else {
+      add('ok', '远端 git 依赖', '无（全部为 link: / registry）', '');
+    }
+  }
+
+  // 5. lockfile 残留 git+ssh
+  const lockFile = path.join(p.profileDir, 'pnpm-lock.yaml');
+  let lock = '';
+  try {
+    lock = fs.readFileSync(lockFile, 'utf8');
+  } catch {
+    // 没 lockfile 不报错
+  }
+  const sshEntries = [...new Set((lock.match(/git\+ssh:\/\/[^\s#)]+/g) || []))];
+  if (sshEntries.length) {
+    add('warn', 'lockfile 残留 git+ssh', `${sshEntries.length} 条`,
+      'pnpm < 11.21 写入的旧记录，缺 SSH key 会直接失败；改成本地 link: 后跑 pnpm install --offline 重建');
+  } else {
+    add('ok', 'lockfile 残留 git+ssh', '无', '');
+  }
+
+  // 6. 本插件挂载情况
+  const registered = bundleRegistered(p.profileManifest);
+  add(registered ? 'ok' : 'warn', 'bundle 已注册', registered ? 'dsh.profile.bundles 含 dsh-session-index' : '未注册',
+    '插件页安装，或运行 node install.mjs');
+
+  const idx = readIndexState(p.indexDir);
+  add(idx.exists && idx.sessions > 0 ? 'ok' : 'warn', '索引状态',
+    idx.exists ? `${idx.sessions} 个会话 / ${idx.builtAt || '-'}` : '尚未生成', '启动 DSH 后会自动建索引');
+
+  const bad = rows.filter((r) => r.level === 'fail').length;
+  const warn = rows.filter((r) => r.level === 'warn').length;
+  return { ok: bad === 0, fail: bad, warn, rows };
+}
+
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   const env = process.env;
@@ -228,9 +329,30 @@ function main() {
   const node = resolveNode(env);
   const byBundle = bundleRegistered(p.profileManifest);
   const out = {
-    action: opts.verify ? 'verify' : opts.uninstall ? 'uninstall' : opts.dryRun ? 'dry-run' : 'install',
+    action: opts.doctor ? 'doctor' : opts.verify ? 'verify' : opts.uninstall ? 'uninstall' : opts.dryRun ? 'dry-run' : 'install',
     pluginDir: PLUGIN_DIR, ...p, nodeBin: node.bin, nodeOk: node.ok, bundle: byBundle, changes: [], backups: [],
   };
+
+  if (opts.doctor) {
+    const result = doctor(p, node.bin);
+    out.doctor = result;
+    out.ok = result.ok;
+    if (opts.json) process.stdout.write(JSON.stringify(out, null, 2) + '\n');
+    else {
+      const mark = { ok: 'OK  ', warn: 'WARN', fail: 'FAIL' };
+      for (const r of result.rows) {
+        console.log(`${mark[r.level]}  ${r.name} — ${r.detail}`);
+        if (r.hint && r.level !== 'ok') console.log(`      修法: ${r.hint}`);
+      }
+      console.log(
+        result.ok
+          ? `\n环境体检通过${result.warn ? `（${result.warn} 项提醒，不影响安装）` : ''}。`
+          : `\n有 ${result.fail} 项会导致安装失败，按上面「修法」处理后重试。`,
+      );
+    }
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
 
   if (!node.ok) {
     out.error = '未找到支持 zlib.zstdDecompressSync 的 Node（需 >= 22.15）。可设置 SESSION_INDEX_NODE 指定路径。';

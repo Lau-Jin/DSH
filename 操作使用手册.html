@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dsh-session-index 操作使用手册 v2.4.0</title>
+<title>dsh-session-index 操作使用手册 v2.4.1</title>
 <style>
   :root{
     --bg:#f7f9fc; --panel:#ffffff; --panel-2:#f1f5fb; --line:#e2e8f2;
@@ -74,7 +74,7 @@
 <body>
 <div class="layout">
 <aside>
-  <div class="brand">dsh-session-index<small>操作使用手册 · v2.4.0</small></div>
+  <div class="brand">dsh-session-index<small>操作使用手册 · v2.4.1</small></div>
   <input id="q" type="search" placeholder="筛选章节 / 关键词…" autocomplete="off">
   <nav id="nav">
     <div class="grp">开始</div>
@@ -102,7 +102,7 @@
   <h1>dsh-session-index 操作使用手册</h1>
   <p>完全化的 MCP 插件：一条命令安装，之后自动配置、自动建索引、<b>新会话由文件事件自动识别（无需重启 DSH）</b>、索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。</p>
   <div class="badges">
-    <span class="badge">版本 <b>v2.4.0</b></span>
+    <span class="badge">版本 <b>v2.4.1</b></span>
     <span class="badge">安装命令 <b>1 条</b></span>
     <span class="badge">会话 <b>32</b>（自动增长）</span>
     <span class="badge">工具 <b>13</b> / 提示词 <b>4</b> / 资源 <b>7+1</b></span>
@@ -168,6 +168,7 @@ install.cmd          # Windows 可直接双击；macOS / Linux / Git Bash 用 ./
     <tr><td><code>update.cmd</code> / <code>./update.sh</code></td><td><code>git pull</code> 后重装，<b>保留手工改过的 env</b></td></tr>
     <tr><td><code>node install.mjs --dry-run</code></td><td>预览改动，不写文件（会显示当前是 bundle 还是 patch 方式）</td></tr>
     <tr><td><code>node install.mjs --verify</code></td><td>校验配置、Node、Skill、索引（6 项）</td></tr>
+    <tr><td><code>node install.mjs --doctor</code></td><td>环境体检（7 项，只读）：插件页装不上时先跑这个</td></tr>
     <tr><td><code>node install.mjs --uninstall</code></td><td>一键回滚，保留备份</td></tr>
     <tr><td><code>node install.mjs --reset-env</code></td><td>用默认值覆盖 env 自定义</td></tr>
     <tr><td><code>node pack.mjs</code></td><td>重新生成插件包 + 技能包</td></tr>
@@ -236,8 +237,8 @@ node pack.mjs verify         # 校验 zip 结构
 session_index_package { "mode": "all" }   # MCP 工具，Agent 也能触发</code></pre>
   <table>
     <tr><th>包</th><th>内容</th><th>用途</th></tr>
-    <tr><td><code>dsh-session-index-v2.4.0.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + 一键脚本 + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
-    <tr><td><code>session-index-skill-v2.4.0.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
+    <tr><td><code>dsh-session-index-v2.4.1.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + 一键脚本 + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
+    <tr><td><code>session-index-skill-v2.4.1.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
   </table>
   <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方解压后运行 <code>node install.mjs</code> 即完成安装。</div>
 </section>
@@ -414,7 +415,42 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <tr><td>prompts/resources 看不到</td><td>客户端可能只实现 tools；Skill 自动兜底，工具不受影响</td></tr>
     <tr><td>语义结果太宽泛</td><td>用 <code>mode: "keyword"</code> 或调小 <code>limit</code>，看 <code>matchType</code></td></tr>
     <tr><td>hybrid 返回 degraded</td><td>正常：未配置 embedding 自动降级</td></tr>
+    <tr><td>插件页提示「没有写入权限，无法安装」</td><td>这不是权限问题，是 pnpm 那一步失败后的归类标签；先跑 <code>node install.mjs --doctor</code> 定位真因</td></tr>
+    <tr><td>安装卡住 / <code>UND_ERR_DESTROYED</code>、<code>UND_ERR_INVALID_ARG</code></td><td>见下方「插件页装不上」三节</td></tr>
   </table>
+
+  <h3>插件页装不上？先体检</h3>
+  <p>DSH 插件页装任何东西，底层都是一次 <code>pnpm install</code>。装不上时先跑只读体检，七项检查各自给出结论和修法：</p>
+<pre><button class="copy">复制</button><code>node install.mjs --doctor</code></pre>
+  <table>
+    <tr><th>检查项</th><th>会导致的现象</th></tr>
+    <tr><td>Node 支持 zstd</td><td>索引建不起来</td></tr>
+    <tr><td>git 全局 URL 重写</td><td>走第三方镜像时 codeload 返回 403 / 认证失败</td></tr>
+    <tr><td>pnpm <code>fetch-timeout</code></td><td>超过 60000 会让 pnpm 11 直接抛 <code>UND_ERR_INVALID_ARG</code>，<b>所有安装失败</b></td></tr>
+    <tr><td>远端 git 依赖</td><td>每次安装都要重下，大仓库必然超时</td></tr>
+    <tr><td>lockfile 残留 <code>git+ssh</code></td><td>仓库已删 / 缺 SSH key 时必失败</td></tr>
+    <tr><td>bundle 是否注册</td><td>插件没被 DSH 加载</td></tr>
+    <tr><td>索引状态</td><td>装完但没建索引</td></tr>
+  </table>
+
+  <h3>三个已确认的坑（2026-11-13 实测）</h3>
+  <ol>
+    <li><b><code>fetch-timeout</code> 有硬上限。</b>pnpm 11.28 + undici 在 <code>fetch-timeout &gt; 60000</code> 时直接报 <code>UND_ERR_INVALID_ARG</code>（60000 正常、65000 就失败）。<b>调大超时不但没用，还会让所有安装全挂</b>，所以 profile 的 <code>.npmrc</code> 里不要写这一项。</li>
+    <li><b>大 tarball 装不完。</b>GitHub 直连实测 70–350 KB/s，28 MB 的包要数分钟，永远过不了 60 秒上限，于是不断 <code>UND_ERR_DESTROYED</code> 重试直到失败。正解是把它<b>本地化</b>：把包复制到本地目录，依赖写成 <code>"pkg": "link:D:\\tools\\pkg"</code>，之后安装完全离线（实测整份 profile 8 秒装完）。</li>
+    <li><b><code>insteadOf</code> 镜像规则会连坐。</b><code>url.https://&lt;镜像&gt;/https://github.com/.insteadOf</code> 会重写所有 GitHub HTTPS 地址，而镜像通常不代理 <code>codeload.github.com</code>（返回 403）。直连可用时建议去掉。</li>
+  </ol>
+<pre><button class="copy">复制</button><code># 1) 先看有没有镜像重写规则
+git config --global --get-regexp "url\..*\.insteadof"
+
+# 2) 有的话去掉（直连可用时）
+git config --global --unset-all "url.https://&lt;镜像前缀&gt;.insteadOf"
+
+# 3) 把远端大依赖本地化（复制包 → link → 离线重建 lockfile）
+#    改 package.json: "某包": "link:D:\\tools\\某包"
+cd ~/.dsh/profiles/desktop
+pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code></pre>
+  <div class="note">本次修复的实际结果：profile 的 7 个依赖里 6 个为本地 <code>link:</code>、1 个来自 registry，<b>零远端 git 依赖</b>；离线整装 2.8 秒，真实 profile 同步 8.3 秒。之后从插件页装任意仓库，只需下载那一个新包。</div>
+
   <h3>安全与回滚</h3>
   <ul>
     <li>索引含会话全文，只落在本机 <code>~/.dsh/session-index/</code>，<b>不要打包分享</b>；分发包已自动排除这些数据。</li>
@@ -438,7 +474,7 @@ session_index_refresh                       // 仅改规则或需即时生效时
 ├── build-index.mjs         多源增量构建器（--quiet 静止期）
 ├── smoke.mjs               66 项端到端自测
 ├── plugin.json             机器可读插件能力清单（含安装方式与仓库信息）
-├── package.json            v2.4.0 / dsh.bundle.patch / dsh.plugin / 脚本
+├── package.json            v2.4.1 / dsh.bundle.patch / dsh.plugin / 脚本
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能
@@ -456,7 +492,7 @@ session_index_refresh                       // 仅改规则或需即时生效时
     ├── embedding.mjs       可选向量嵌入与缓存
     ├── notes.mjs           长期记忆库
     └── index-store.mjs     各类 JSON 文档与分片读写</code></pre>
-  <h3>验证记录（2026-11-13，v2.4.0）</h3>
+  <h3>验证记录（2026-11-13，v2.4.1）</h3>
   <table>
     <tr><th>项</th><th>结果</th></tr>
     <tr><td>bundle patch 语法与求值</td><td>用 DSH 自带的 js-yaml 复刻 <code>!!js</code> 标量 + cordis 的 <code>with (ctx) { eval(expr) }</code> 求值链：YAML 解析通过、2 个 insert 条目正确、<code>command</code> 解析到 DSH 自带 node（v24.21.0，含 zstd）</td></tr>
@@ -468,6 +504,10 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <tr><td>新会话免重启</td><td>临时目录写入新会话 → <code>fs-event</code> → 重建 1 个 / 70ms → 通知 → <code>list</code>/<code>search</code> 立即可查；默认静止期 6000 下同样通过</td></tr>
     <tr><td>自动打包</td><td>插件包 29 文件（含 <code>cordis.patch.yml</code> 与 <code>lib/index.mjs</code>），技能包 3 文件；系统 <code>Expand-Archive</code> 解压成功，0 敏感文件，CRC 与中央目录有效</td></tr>
     <tr><td>全量冒烟</td><td><b>66/66 通过</b>；全量语法检查通过；手册自包含 14 章</td></tr>
+    <tr><td>环境体检（v2.4.1）</td><td><code>--doctor</code> 在干净环境 7 项全绿；构造「镜像重写 + <code>fetch-timeout=900000</code> + 远端 git 依赖 + lockfile 残留 <code>git+ssh</code>」的坏环境后，四类问题全部命中并给出修法，退出码 1</td></tr>
+    <tr><td>pnpm 超时上限</td><td>实测 <code>fetch-timeout</code>：60000 正常、65000 起报 <code>UND_ERR_INVALID_ARG</code>（与 undici 的参数上限有关），故不建议调大</td></tr>
+    <tr><td>本地化后离线安装</td><td>6 个依赖改 <code>link:</code> 后：全新目录 <code>--offline --frozen-lockfile</code> 整装 <b>2.8 秒</b>；真实 profile 同步 <b>8.3 秒</b>，零远端 git 依赖</td></tr>
+    <tr><td>从仓库地址安装</td><td>模拟插件页「输入仓库地址」安装 <code>Lau-Jin/DSH</code>：成功装出 <code>dsh-session-index 2.4.1</code>，<code>cordis.patch.yml</code> / <code>lib/index.mjs</code> / <code>server.mjs</code> 均在包内（耗时约 99 秒，主要是 GitHub git 往返）</td></tr>
   </table>
   <h3>版本演进</h3>
   <ul>
@@ -476,10 +516,11 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <li><b>v2.2.0</b> 完全化插件：文件事件驱动识别新会话（免重启）、索引变更主动通知、自动打包插件与技能包（13 工具）。</li>
     <li><b>v2.3.0</b> 仓库化分发：<code>Lau-Jin/DSH</code> 只存本插件、仓库根即插件根，新增 <code>install.cmd/sh</code> 与 <code>update.cmd/sh</code> 一键入口；重装自动保留手工改过的 env。</li>
     <li><b>v2.4.0</b> <b>插件页直接安装</b>：声明 <code>dsh.bundle.patch</code> + 新增 <code>cordis.patch.yml</code>（<code>!!js</code> 自解析命令与路径）+ 新增宿主半身 <code>lib/index.mjs</code>；装到哪都不用改配置，一次重启生效。仓库转公开。<code>install.mjs</code> 自动识别 bundle 模式，避免重复注册。</li>
+    <li><b>v2.4.1</b> 新增 <code>install.mjs --doctor</code> <b>环境体检</b>（7 项，只读），把「插件页装不上」的四个真实成因变成可自动定位的检查项：git URL 重写镜像、pnpm <code>fetch-timeout</code> 超上限、远端大 tarball、lockfile 残留 <code>git+ssh</code>。手册第 13 章补充三条实测坑与修法。</li>
   </ul>
 </section>
 
-<footer>dsh-session-index v2.4.0 · 操作使用手册 · 生成于 2026-11-13 · 零第三方依赖</footer>
+<footer>dsh-session-index v2.4.1 · 操作使用手册 · 生成于 2026-11-13 · 零第三方依赖</footer>
 </main>
 </div>
 <script>

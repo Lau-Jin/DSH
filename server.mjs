@@ -1,5 +1,5 @@
 /**
- * dsh-session-index v2.4.0 — 零依赖 MCP 插件，装上即用、新会话免重启识别
+ * dsh-session-index v2.4.1 — 零依赖 MCP 插件，装上即用、新会话免重启识别
  *
  * 统一索引 DSH + WorkBuddy 全部历史会话，提供：
  *   - 跨会话会话卡与结论速览、关联、血缘
@@ -28,7 +28,7 @@ import { embeddingConfig, syncVectors, vectorRank, cardChunks, vectorStats } fro
 import { pack, packAll, listPacks } from './lib/pack.mjs';
 
 const { sessionsRoot, indexDir, workbuddyProjectsDir } = defaultPaths();
-const VERSION = '2.4.0';
+const VERSION = '2.4.1';
 const SUPPORTED_PROTOCOLS = new Set(['2024-11-05', '2025-03-26', '2025-06-18']);
 const log = (...parts) => process.stderr.write(`[dsh-session-index] ${parts.join(' ')}\n`);
 
