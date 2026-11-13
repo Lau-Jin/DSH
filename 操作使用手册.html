@@ -133,7 +133,7 @@ WorkBuddy  ~/.workbuddy/projects/&lt;工作区&gt;/&lt;会话id&gt;.jsonl
 
   <h3>方式 A：DSH 插件页（推荐 · 零命令行）</h3>
   <pre><button class="copy">复制</button><code>仓库地址：https://github.com/Lau-Jin/DSH</code></pre>
-  <p>打开 DSH → 插件页 → 粘贴上面的地址 → 点安装 → 按提示<b>完全退出 DSH 再打开</b>。装完即可用，不用改配置、不用跑脚本。</p>
+  <p>打开 DSH → 插件页 → 粘贴上面的地址 → 点安装 → 按提示<b>完全退出 DSH 再打开</b>。装完即可用，不用改配置、不用跑脚本。装好后「已安装」列表与详情页会显示本插件图标（紫色卡片 + 放大镜，来自 <code>icon.svg</code>，符合 DSH 的 <code>icon</code> 展示规范：相对路径、SVG/PNG/JPEG/WebP、≤256 KiB）。</p>
   <p>插件包里的 <code>cordis.patch.yml</code> 会随 bundle 自动应用，挂两行：</p>
   <table>
     <tr><th>行 id</th><th>包</th><th>作用</th></tr>
@@ -473,8 +473,9 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
 ├── cordis.patch.yml        bundle 层：挂宿主行 + MCP 行（!!js 自解析命令与路径）
 ├── build-index.mjs         多源增量构建器（--quiet 静止期）
 ├── smoke.mjs               66 项端到端自测
+├── icon.svg                插件页图标（卡片 + 放大镜，64×64 SVG，938 字节）
 ├── plugin.json             机器可读插件能力清单（含安装方式与仓库信息）
-├── package.json            v2.4.1 / dsh.bundle.patch / dsh.plugin / 脚本
+├── package.json            v2.4.1 / icon / dsh.bundle.patch / dsh.plugin / 脚本
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能

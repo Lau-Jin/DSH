@@ -31,7 +31,7 @@ DSH 的会话存在 `~/.dsh/sessions/` 下，是**上千个独立 zstd 帧拼接
 2. 粘贴仓库地址：`https://github.com/Lau-Jin/DSH`
 3. 点安装，按提示**完全退出 DSH 再打开**（最小化无效）
 
-装完就是可用状态，不用改配置、不用跑脚本、不用管 Node 路径。
+装完就是可用状态，不用改配置、不用跑脚本、不用管 Node 路径。「已安装」列表与详情页会显示插件图标（`icon.svg`，卡片 + 放大镜）。
 
 > 地址带不带 `.git` 都能装：不带时 pnpm 直接走 codeload 下 tarball，**不依赖本机 git**；
 > 带上 `.git` 会先做一次 `git ls-remote` 解析版本。网络抖动时前者更稳。
@@ -256,6 +256,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 ├── smoke.mjs                       # 66 项端到端自测
 ├── install.cmd / install.sh        # 一键安装（双击 / 执行）
 ├── update.cmd / update.sh          # 更新（git pull + 重装）
+├── icon.svg                        # 插件页图标（package.json 的 icon 字段指向它）
 ├── plugin.json                     # 机器可读能力清单（也通过 MCP 资源暴露）
 ├── package.json                    # 元信息 + dsh.bundle.patch + dsh.plugin 声明
 ├── 操作使用手册.html                # 自包含单页手册（14 章）

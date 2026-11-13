@@ -1,6 +1,7 @@
 {
   "name": "dsh-session-index",
   "version": "2.4.1",
+  "icon": "icon.svg",
   "displayName": {
     "zh": "全会话索引与跨会话记忆",
     "en": "Session Index & Cross-Session Memory"

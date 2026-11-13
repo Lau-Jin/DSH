@@ -8,6 +8,7 @@
     "node": ">=22.15"
   },
   "main": "./lib/index.mjs",
+  "icon": "./icon.svg",
   "exports": {
     ".": "./lib/index.mjs",
     "./server": "./server.mjs",
@@ -32,6 +33,7 @@
     "*.html",
     "*.cmd",
     "*.sh",
+    "*.svg",
     "*.yml",
     "lib/",
     "skill/",
