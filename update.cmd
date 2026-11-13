@@ -1,33 +1,34 @@
 @echo off
+rem Pure ASCII output on purpose: cmd.exe mis-parses UTF-8 .cmd files.
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>nul
-title dsh-session-index 更新
+title dsh-session-index updater
 
 set "PLUGIN_DIR=%~dp0"
 if "%PLUGIN_DIR:~-1%"=="\" set "PLUGIN_DIR=%PLUGIN_DIR:~0,-1%"
 
 echo ============================================================
-echo   dsh-session-index 更新（git pull + 重装）
-echo   目录: %PLUGIN_DIR%
+echo   dsh-session-index updater (git pull + reinstall)
+echo   Dir: %PLUGIN_DIR%
 echo ============================================================
 echo.
 
 if not exist "%PLUGIN_DIR%\.git" (
-  echo [跳过] 当前目录不是 git 仓库（可能是解压安装的 zip）。
-  echo        如需更新，请删除本目录后重新 git clone。
+  echo [SKIP] Not a git repo ^(probably installed from a zip^).
+  echo        To update, delete this folder and clone the repo again.
   goto :reinstall
 )
 
-echo [1/3] 拉取最新代码...
+echo [1/3] Pulling latest code...
 git -C "%PLUGIN_DIR%" pull --ff-only
 if errorlevel 1 (
   echo.
-  echo [警告] git pull 失败（网络或 SSH key 问题），继续用当前版本重装。
+  echo [WARN] git pull failed ^(network or SSH key^), reinstalling current version.
 )
 
 :reinstall
 echo.
-echo [2/3] 重新安装（会保留你手工改过的 env 配置）...
+echo [2/3] Reinstalling ^(your custom env values are preserved^)...
 pushd "%PLUGIN_DIR%"
 node install.mjs
 set "RC=%ERRORLEVEL%"
@@ -35,7 +36,7 @@ popd
 if not "!RC!"=="0" goto :fail
 
 echo.
-echo [3/3] 校验...
+echo [3/3] Verifying...
 pushd "%PLUGIN_DIR%"
 node install.mjs --verify
 set "RC2=%ERRORLEVEL%"
@@ -43,13 +44,13 @@ popd
 
 echo.
 echo ============================================================
-echo   更新完成。完全退出 DSH 桌面端再打开即可用新版本。
+echo   Update done. Fully quit DSH and reopen to load the new version.
 echo ============================================================
 if "%~1"=="" pause
 exit /b !RC2!
 
 :fail
 echo.
-echo [失败] 更新未完成，请查看上方错误信息。
+echo [FAILED] Update did not complete. See the errors above.
 if "%~1"=="" pause
 exit /b 1
