@@ -406,7 +406,14 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <tr><td><code>node smoke.mjs</code> / <code>npm run check</code></td><td>80 项自测 / 语法检查</td></tr>
     <tr><td><code>node tools/push-doc.mjs [--send]</code></td><td>把手册 / 任意 md·html 推到思源桥待入库（默认只读预览，<code>--send</code> 才入队，绝不写库）</td></tr>
     <tr><td><code>node tools/push-doc.mjs --from-workbuddy [--send]</code></td><td><b>批量</b>：扫描 WorkBuddy 全部会话生成的文档，去排除/去重后一次性投递；<code>--no-exclude</code> 含临时目录、<code>--include-txt</code> 含 txt、<code>--source</code> 按生成方式、<code>--limit</code> 设上限</td></tr>
+    <tr><td><code>node tools/push-doc.mjs --from-workbuddy --seed</code></td><td>只写「已推送」状态基线，<b>不投递任何文档</b>；首次启用或迁移状态文件时用</td></tr>
   </table>
+  <div class="note"><b>判重对齐思源桥 autoStage，但丢弃后不重新获取。</b>状态文件
+  <code>~/.dsh/session-index/push-doc-state.json</code>（<code>PUSH_DOC_STATE</code> 可改）按
+  「文档路径 + 内容 sha256」记录已推送过的文档，判重<b>不依赖队列当前状态</b>：在思源桥里丢弃某篇、
+  清空队列、服务重启或定时任务重跑，都不会把它重新推回来；只有内容真的改了才作为新版本投一次。
+  <code>--force</code> 可强制绕过。实测：模拟「22 篇全部被丢弃」时 POST 次数为 0；内容更新后投 1 次、
+  再跑 0 次。</div>
 
   <h3>会话整理 → 思源桥待入库（v2.5.0 起）</h3>
   <p>DSH 插件之间<b>不共享会话数据</b>：会话本体只有一份磁盘文件，各插件各自解析、各存各的目录。会话卡与结论已在 session-index 手里，思源桥又是独立的 HTTP 服务（<code>127.0.0.1:5599</code>），所以一次接口调用即可对接，<b>不必新建第三个插件</b>，也不用再解一遍 zstd。</p>
@@ -541,7 +548,8 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     <tr><td>stage 两步确认（v2.5.0）</td><td>本地起假思源桥（<code>node:http</code>，不碰真实 5599 队列）：只读探测零写入 → 默认预览不投递 → 错误令牌 <code>TOKEN_MISMATCH</code> 拒绝 → 回传 <code>confirmWith</code> 成功入队 → 重复投递被去重 → 全程<b>零次 commit</b>，投递正文含「未写入笔记库」声明</td></tr>
     <tr><td>stage 真实服务只读</td><td><code>GET /api/status</code> / <code>/api/stage</code> / <code>/api/autostage</code> 实测可达：内核 3.8.9、待入库 0 篇、<code>autoStage=true</code>；本轮未产生任何写入</td></tr>
     <tr><td>索引并发写加固</td><td>多进程同时写索引时 Windows <code>rename</code> 偶发 <code>EPERM</code> → 原子写加 0/40/120/300ms 退避重试；<b>80/80 冒烟全绿</b></td></tr>
-    <tr><td>WorkBuddy 文档批量投递（v2.5.1）</td><td>70 条文档命中 → 排除临时/依赖 26 → 文件缺失 4 → 内容/路径重复 18 → <b>22 篇全部投递成功</b>，队列 23 篇 / 16.6 万字；标题唯一、全部带 note 与预览、落点一致；重复执行 22 篇全被同名去重拦截；全程零 commit</td></tr>
+    <tr><td>WorkBuddy 文档批量投递（v2.5.1）</td><td>70 条文档命中 → 排除临时/依赖 26 → 文件缺失 4 → 内容/路径重复 18 → <b>22 篇全部投递成功</b>，队列 23 篇 / 16.6 万字；标题唯一、全部带 note 与预览、落点一致；全程零 commit</td></tr>
+    <tr><td>丢弃后不重推（v2.5.1 修订）</td><td><code>--seed</code> 建立 22 条状态基线；用假思源桥模拟「队列被全部丢弃」（返回空队列 + discarded=22）→ <b>POST 次数 0</b>、22 篇全部因「已推送过」跳过；隔离环境验证内容未变 0 次、内容更新 1 次、再跑 0 次；真实队列下重跑 0 新增、仍 23 篇</td></tr>
   </table>
   <h3>版本演进</h3>
   <ul>
@@ -552,7 +560,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     <li><b>v2.4.0</b> <b>插件页直接安装</b>：声明 <code>dsh.bundle.patch</code> + 新增 <code>cordis.patch.yml</code>（<code>!!js</code> 自解析命令与路径）+ 新增宿主半身 <code>lib/index.mjs</code>；装到哪都不用改配置，一次重启生效。仓库转公开。<code>install.mjs</code> 自动识别 bundle 模式，避免重复注册。</li>
     <li><b>v2.4.1</b> 新增 <code>install.mjs --doctor</code> <b>环境体检</b>（7 项，只读），把「插件页装不上」的四个真实成因变成可自动定位的检查项：git URL 重写镜像、pnpm <code>fetch-timeout</code> 超上限、远端大 tarball、lockfile 残留 <code>git+ssh</code>。手册第 13 章补充三条实测坑与修法。</li>
     <li><b>v2.5.0</b> 新增第 14 个工具 <code>session_index_stage</code>：<b>会话整理文档 → 思源桥待入库</b>。两步确认（预览给令牌，回传 <code>confirmWith</code> 才投递）、标题+字数去重、三种模板与落点可配；只入队，<b>绝不自动写库</b>。第 12 章补完整用法。</li>
-    <li><b>v2.5.1</b> <code>tools/push-doc.mjs</code> 新增 <code>--from-workbuddy</code> <b>批量模式</b>：扫描 WorkBuddy 全部会话生成的文档，内容哈希去重 + 排除临时目录 + 同名查重后一次投递；默认只读预览。实测 22 篇全部入队、重复执行全被拦截。README 补「插件怎么更新」：本机为 <code>link:</code> 挂载，<code>git pull</code> + 重启即生效，<b>无需卸载重装</b>。</li>
+    <li><b>v2.5.1</b> <code>tools/push-doc.mjs</code> 新增 <code>--from-workbuddy</code> <b>批量模式</b>：扫描 WorkBuddy 全部会话生成的文档，内容哈希去重 + 排除临时目录 + 同名查重后一次投递；默认只读预览。实测 22 篇全部入队、重复执行全被拦截。README 补「插件怎么更新」：本机为 npm registry 来源（<code>dsh-session-index-lau</code>），插件页<b>有「更新」按钮、无需卸载重装</b>。<b>同版修订</b>：批量判重改为持久化状态文件（<code>push-doc-state.json</code>），丢弃后不重新推送、内容更新才投新版；新增 <code>--seed</code>。</li>
   </ul>
 </section>
 

@@ -270,6 +270,7 @@ node tools/push-doc.mjs --from-workbuddy --send           # 全部投递到待�
 node tools/push-doc.mjs --from-workbuddy --no-exclude     # 连临时/备份目录一起
 node tools/push-doc.mjs --from-workbuddy --include-txt    # 连 .txt 一起
 node tools/push-doc.mjs --from-workbuddy --source PresentFiles --limit 10 --send
+node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，不投递任何文档
 ```
 
 数据源是 `~/.workbuddy/artifact-index/<会话id>.json` 里 `contentType: document` 的条目
@@ -278,13 +279,22 @@ node tools/push-doc.mjs --from-workbuddy --source PresentFiles --limit 10 --send
 避免同一份 README 被推十几遍。每篇标题带相对路径、备注带来源会话，落点统一可在界面改。
 
 实测（2026-11-14）：70 条文档命中 → 排除 26 条临时/依赖 → 文件已不存在 4 →
-路径或内容重复 18 → **唯一 22 篇全部投递成功**，队列 23 篇（含此前单推的手册），
-重复执行 22 篇全部被同名去重拦截。可用 `--limit`（默认 60）与 `--since` 收窄。
+路径或内容重复 18 → **唯一 22 篇全部投递成功**，队列 23 篇（含此前单推的手册）。
+可用 `--limit`（默认 60）与 `--since` 收窄。
+
+**判重：对齐思源桥 `autoStage` 的 `.auto-staged.json`，但丢弃后不重新获取。**
+
+状态文件 `~/.dsh/session-index/push-doc-state.json`（`PUSH_DOC_STATE` 可改）按
+「文档路径 + 内容 sha256」记录已推送过的文档，**判重不看队列里还在不在**：
+
+- 在思源桥里「丢弃」某篇 → 下次自动化**不会**把它重新推送回来
+- 队列被清空、服务重启、定时任务重跑 → 同样不会重复入队
+- 内容真的改了 → 作为新版本投递一次，之后又不再重复
+- `--force` 可强制绕过；`--seed` 只写状态基线、不投递（首次启用或迁移时用）
 
 - **默认只预览**，加 `--send` 才入队；预览写到 `dist/push-doc-preview.md`
 - HTML 会先裁掉侧栏导航、复制按钮、脚本、样式与统计卡，再用思源桥自带的
   `/api/paste/html`（只读）转成 Markdown，不会把界面文字塞进笔记
-- 队列里已有同名稿时**默认不重复投递**；手册更新后要再投一份需显式 `--force`
 - 同样**只入队、不 commit**，写入仍由你在思源桥界面确认
 
 ### 插件怎么更新（DSH 插件页有没有「更新」按钮）
@@ -298,19 +308,26 @@ node tools/push-doc.mjs --from-workbuddy --source PresentFiles --limit 10 --send
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-本仓库插件在本机是 **`link:` 挂载**（`node_modules/dsh-session-index` 是指向仓库目录的
-junction），所以插件页**不会有更新按钮**——但也不需要：
+**本机当前是 npm registry 来源**：profile 依赖 `dsh-session-index-lau: ^2.5.1`，
+属于上表第一行，所以插件页**有「版本」区块与「更新」按钮**——以后发新版后
+**点更新即可，不需要卸载重装**。命令行 `pnpm update <包名>` 与点按钮是同一条路径。
+
+发布侧走 `dist/publish/` 下的标准流程（`插件发布标准流程.md`）：
 
 ```bash
-git -C <仓库目录> pull     # 代码就在 junction 指向的目录里，pull 完即更新
-# 然后完全退出 DSH 再打开（MCP 子进程在启动时加载）
+node sync-publish.mjs session-index                       # 生成改名后的发布副本并自检
+cd dsh-session-index-lau && npm publish --access public
+# 等 npm staged publishing 生效（实测约 1 分钟）
+cd ~/.dsh/profiles/desktop && npx -y pnpm@11.28.5 update dsh-session-index-lau@<新版本>
 ```
 
-不需要卸载、不需要重新安装、不需要发布 npm 包。若你以后改成从插件页输入
-`github:Lau-Jin/DSH` 安装，才会变成 Git 来源、出现「更新」入口，但那样就不再跟随本地
-开发目录，且每次更新要走一遍 GitHub 下载（本机实测 80–100 秒）。
+注意 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 要同步登记新版本，
+否则供应链冷却期会让 pnpm 静默回退旧版。更新后**完全退出 DSH 再打开**，
+运行中的 MCP 子进程才会换成新版。
 
-> 发布给别人用只需要 `git push`；本机生效只需要 `git pull` + 重启 DSH。
+> 只有从本地路径 / `link:` / 压缩包安装的才没有更新按钮（需卸载重装）；
+> 这类挂载因为直接指向仓库目录，`git pull` + 重启即生效，同样不用重装。
+> 发布给别人用需要 `git push` + `npm publish`；本机开发目录则 `git pull` 即可。
 
 ---
 
