@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-index",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "private": true,
   "type": "module",
   "description": "完全化的 DSH + WorkBuddy 全会话 MCP 插件：装到 DSH 里即用（bundle 自动挂载，无需手工改配置）、自动建索引、文件事件驱动识别新会话、MCP 变更通知、自动打包插件与技能。零第三方依赖，源会话只读。",

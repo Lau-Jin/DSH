@@ -5,7 +5,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.5.0** |
+| 版本 | **v2.5.1** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
 | MCP 能力 | **14 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
@@ -262,11 +262,55 @@ node tools/push-doc.mjs --file README.md --dry            # 推别的文件
 node tools/push-doc.mjs --hpath "/会话札记/运维" --send    # 指定落点
 ```
 
+**批量：WorkBuddy 所有会话生成的文档**
+
+```bash
+node tools/push-doc.mjs --from-workbuddy                  # 只列清单（默认，零写入）
+node tools/push-doc.mjs --from-workbuddy --send           # 全部投递到待入库
+node tools/push-doc.mjs --from-workbuddy --no-exclude     # 连临时/备份目录一起
+node tools/push-doc.mjs --from-workbuddy --include-txt    # 连 .txt 一起
+node tools/push-doc.mjs --from-workbuddy --source PresentFiles --limit 10 --send
+```
+
+数据源是 `~/.workbuddy/artifact-index/<会话id>.json` 里 `contentType: document` 的条目
+（`WORKBUDDY_ARTIFACT_INDEX` 可改）。默认会**排除** `node_modules/dist/.git`、`.verify-*`、
+`DSH-probe`、旧开发副本 `dsh-session-index`、备份与 UI 源码，并按**内容哈希 + 路径**去重，
+避免同一份 README 被推十几遍。每篇标题带相对路径、备注带来源会话，落点统一可在界面改。
+
+实测（2026-11-14）：70 条文档命中 → 排除 26 条临时/依赖 → 文件已不存在 4 →
+路径或内容重复 18 → **唯一 22 篇全部投递成功**，队列 23 篇（含此前单推的手册），
+重复执行 22 篇全部被同名去重拦截。可用 `--limit`（默认 60）与 `--since` 收窄。
+
 - **默认只预览**，加 `--send` 才入队；预览写到 `dist/push-doc-preview.md`
 - HTML 会先裁掉侧栏导航、复制按钮、脚本、样式与统计卡，再用思源桥自带的
   `/api/paste/html`（只读）转成 Markdown，不会把界面文字塞进笔记
 - 队列里已有同名稿时**默认不重复投递**；手册更新后要再投一份需显式 `--force`
 - 同样**只入队、不 commit**，写入仍由你在思源桥界面确认
+
+### 插件怎么更新（DSH 插件页有没有「更新」按钮）
+
+**有，但只对特定安装来源显示**，这是 DSH 插件页的规则（从 DSH 内置文档确认）：
+
+| 安装来源 | 更新方式 |
+|---|---|
+| 注册表（npm）安装的第三方组合包 | 详情页有「版本」区块与**更新**按钮，可查新版本并升级 |
+| Git 仓库安装的组合包（`update: 'git'`） | 通过「发现」页 / 详情页的**更新到**升级 |
+| 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
+| **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
+
+本仓库插件在本机是 **`link:` 挂载**（`node_modules/dsh-session-index` 是指向仓库目录的
+junction），所以插件页**不会有更新按钮**——但也不需要：
+
+```bash
+git -C <仓库目录> pull     # 代码就在 junction 指向的目录里，pull 完即更新
+# 然后完全退出 DSH 再打开（MCP 子进程在启动时加载）
+```
+
+不需要卸载、不需要重新安装、不需要发布 npm 包。若你以后改成从插件页输入
+`github:Lau-Jin/DSH` 安装，才会变成 Git 来源、出现「更新」入口，但那样就不再跟随本地
+开发目录，且每次更新要走一遍 GitHub 下载（本机实测 80–100 秒）。
+
+> 发布给别人用只需要 `git push`；本机生效只需要 `git pull` + 重启 DSH。
 
 ---
 
@@ -297,8 +341,8 @@ node smoke.mjs                   # 80 项端到端自测
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.5.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
-| `dist/session-index-skill-v2.5.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.5.1.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
+| `dist/session-index-skill-v2.5.1.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可随时 `node pack.mjs` 重打，或调 MCP 工具 `session_index_package`。
@@ -389,6 +433,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 
 | 版本 | 变更 |
 |---|---|
+| **v2.5.1** | `tools/push-doc.mjs` 增加 **`--from-workbuddy` 批量模式**：扫描 WorkBuddy 全部会话产出的文档，按内容哈希去重、排除临时/依赖目录、逐篇查重后一次性投递到思源桥待入库；默认只读预览，`--send` 才入队，`--no-exclude` / `--include-txt` / `--source` / `--limit` / `--since` / `--force` 可控。修掉按 `chars` 判重不稳的问题（思源桥会规整正文）。README 补「插件怎么更新」章节。 |
 | **v2.5.0** | 新增第 14 个工具 `session_index_stage`：**会话整理文档 → 思源桥「待入库」队列**。两步确认（预览返回令牌，原样回传 `confirmWith` 才投递）、按标题+字数去重、支持主题/指定会话/三种模板/落点配置，**绝不自动写入思源笔记库**。读取状态与队列可传 `status: true`。 |
 | **v2.4.1** | 新增 `install.mjs --doctor` **环境体检**（7 项，只读），覆盖插件页安装失败的四个真实成因：git URL 重写镜像、pnpm `fetch-timeout` 超上限、远端大 tarball、lockfile 残留 `git+ssh`。README 增加「插件页装不上」排障章节。 |
 | **v2.4.0** | 支持 **DSH 插件页直接安装**：新增 `dsh.bundle.patch` 声明与 `cordis.patch.yml`（含 `!!js` 自解析表达式），新增宿主半身 `lib/index.mjs`。安装路径由运行时探测，不再依赖手工配置；`install.mjs` 自动识别 bundle 模式，避免与插件页安装重复注册。仓库转公开。 |

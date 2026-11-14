@@ -128,9 +128,9 @@ try {
   const init = await request('initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
-    clientInfo: { name: 'smoke-test', version: '2.5.0' },
+    clientInfo: { name: 'smoke-test', version: '2.5.1' },
   });
-  check('initialize 握手与能力声明', init.result?.serverInfo?.version === '2.5.0' && Boolean(init.result?.capabilities?.prompts) && Boolean(init.result?.capabilities?.resources), init.result?.serverInfo?.version);
+  check('initialize 握手与能力声明', init.result?.serverInfo?.version === '2.5.1' && Boolean(init.result?.capabilities?.prompts) && Boolean(init.result?.capabilities?.resources), init.result?.serverInfo?.version);
   check('initialize 返回自描述 instructions', (init.result?.instructions || '').includes('session_index_brief'));
   check('声明 listChanged 通知能力', init.result?.capabilities?.resources?.listChanged === true && init.result?.capabilities?.prompts?.listChanged === true);
   notify('notifications/initialized');
