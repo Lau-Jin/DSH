@@ -37,6 +37,7 @@
     "*.yml",
     "lib/",
     "skill/",
+    "tools/",
     "dist/*.zip"
   ],
   "dsh": {
