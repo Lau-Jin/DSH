@@ -105,10 +105,10 @@
     <span class="badge">版本 <b>v2.5.0</b></span>
     <span class="badge">安装命令 <b>1 条</b></span>
     <span class="badge">会话 <b>32</b>（自动增长）</span>
-    <span class="badge">工具 <b>13</b> / 提示词 <b>4</b> / 资源 <b>7+1</b></span>
+    <span class="badge">工具 <b>14</b> / 提示词 <b>4</b> / 资源 <b>7+1</b></span>
     <span class="badge">新会话识别 <b>免重启</b></span>
     <span class="badge">分发包 <b>自动生成</b></span>
-    <span class="badge">冒烟 <b>66/66</b></span>
+    <span class="badge">冒烟 <b>80/80</b></span>
   </div>
 </header>
 
@@ -404,6 +404,7 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <tr><td><code>node pack.mjs</code>（含 status / verify / plugin / skill）</td><td>自动打包与校验</td></tr>
     <tr><td><code>node build-index.mjs --force</code></td><td>全量重建（改抽取规则后）</td></tr>
     <tr><td><code>node smoke.mjs</code> / <code>npm run check</code></td><td>80 项自测 / 语法检查</td></tr>
+    <tr><td><code>node tools/push-doc.mjs [--send]</code></td><td>把手册 / 任意 md·html 推到思源桥待入库（默认只读预览，<code>--send</code> 才入队，绝不写库）</td></tr>
   </table>
 
   <h3>会话整理 → 思源桥待入库（v2.5.0）</h3>
@@ -504,6 +505,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能
+├── tools/push-doc.mjs      推送任意 md/html 到思源桥待入库（默认只读预览）
 ├── dist/                   自动生成的插件包 / 技能包（git 忽略）
 └── lib/
     ├── index.mjs           宿主半身：解析自身安装路径（供 bundle 挂载）

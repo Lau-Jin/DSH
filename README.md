@@ -250,6 +250,24 @@ DSH 的插件之间**不共享会话数据**：会话本体只有一份磁盘文
 > 实测提醒：思源桥 `/api/autostage` 返回的实际 `session-docs` 目录可能与 `config.json` 里的
 > `dataDir` 不一致（服务走 `SIYUAN_BRIDGE_DATA` 推导）。本工具走 HTTP 接口，不受这个差异影响。
 
+### 推送已有文档（手册 / README）
+
+`session_index_stage` 整理的是**索引里的会话**；如果要把仓库里现成的文档送进待入库，
+用独立脚本 `tools/push-doc.mjs`（不需要重启 DSH、不依赖 MCP 服务）：
+
+```bash
+node tools/push-doc.mjs                                   # 只读预览《操作使用手册.html》
+node tools/push-doc.mjs --send                            # 投递到待入库（绝不写库）
+node tools/push-doc.mjs --file README.md --dry            # 推别的文件
+node tools/push-doc.mjs --hpath "/会话札记/运维" --send    # 指定落点
+```
+
+- **默认只预览**，加 `--send` 才入队；预览写到 `dist/push-doc-preview.md`
+- HTML 会先裁掉侧栏导航、复制按钮、脚本、样式与统计卡，再用思源桥自带的
+  `/api/paste/html`（只读）转成 Markdown，不会把界面文字塞进笔记
+- 队列里已有同名稿时**默认不重复投递**；手册更新后要再投一份需显式 `--force`
+- 同样**只入队、不 commit**，写入仍由你在思源桥界面确认
+
 ---
 
 ## 更新 / 校验 / 回滚
@@ -341,6 +359,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 │   ├── pack.mjs                    # ZIP writer
 │   └── stage.mjs                   # 会话整理 → 思源桥待入库（渲染 + HTTP 投递）
 ├── skill/SKILL.md                  # 自动接入用技能
+├── tools/push-doc.mjs             # 推送任意 md/html 到思源桥待入库（默认只读预览）
 └── dist/                           # 自动生成的分发包（git 忽略）
 ```
 
