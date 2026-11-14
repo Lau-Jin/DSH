@@ -7,10 +7,45 @@
  * 测试写入的记忆会在结尾物理清除，不污染真实记忆库。
  */
 import { spawn } from 'node:child_process';
+import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { inspectZip } from './lib/pack.mjs';
+
+// 本地假思源桥：完整实现 status / stage / autostage 三个只读端点与 POST /api/stage，
+// 用来验证两步确认与去重，绝不碰 5599 上真实的「待入库」队列。
+const stagePosts = [];
+const stagedItems = [];
+const mockBridge = http.createServer((req, res) => {
+  const send = (code, obj) => {
+    res.writeHead(code, { 'content-type': 'application/json' });
+    res.end(JSON.stringify(obj));
+  };
+  const u = new URL(req.url, 'http://127.0.0.1');
+  if (req.method === 'GET' && u.pathname === '/api/status') return send(200, { kernel: '3.8.9', staged: stagedItems.length, notebooks: [] });
+  if (req.method === 'GET' && u.pathname === '/api/stage') return send(200, { items: stagedItems, discarded: 0 });
+  if (req.method === 'GET' && u.pathname === '/api/autostage') return send(200, { enabled: true, dir: 'D:/mock/session-docs', hpath: '/会话札记/思源', files: [] });
+  if (req.method === 'POST' && u.pathname === '/api/stage') {
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      const p = JSON.parse(raw || '{}');
+      stagePosts.push(p);
+      const item = { id: '20261114140000-abcdef', title: p.title, chars: String(p.markdown || '').length, hpath: p.hpath, notebook: p.notebook, note: p.note };
+      stagedItems.push(item);
+      send(200, { id: item.id, title: item.title, chars: item.chars, staged: true });
+    });
+    return;
+  }
+  if (u.pathname.includes('/commit')) {
+    stagePosts.push({ __forbidden: 'commit' });
+    return send(200, {});
+  }
+  return send(404, { error: 'not found' });
+});
+await new Promise((r) => mockBridge.listen(0, '127.0.0.1', r));
+const stageUrl = `http://127.0.0.1:${mockBridge.address().port}`;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const child = spawn(process.execPath, [path.join(here, 'server.mjs')], {
@@ -18,6 +53,7 @@ const child = spawn(process.execPath, [path.join(here, 'server.mjs')], {
   stdio: ['pipe', 'pipe', 'pipe'],
   env: {
     ...process.env,
+    SIYUAN_BRIDGE_URL: stageUrl,
     SESSION_INDEX_WATCH_DEBOUNCE_MS: '60000',
     SESSION_INDEX_AUTO_INTERVAL_MS: '3600000',
   },
@@ -92,16 +128,16 @@ try {
   const init = await request('initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
-    clientInfo: { name: 'smoke-test', version: '2.4.1' },
+    clientInfo: { name: 'smoke-test', version: '2.5.0' },
   });
-  check('initialize 握手与能力声明', init.result?.serverInfo?.version === '2.4.1' && Boolean(init.result?.capabilities?.prompts) && Boolean(init.result?.capabilities?.resources), init.result?.serverInfo?.version);
+  check('initialize 握手与能力声明', init.result?.serverInfo?.version === '2.5.0' && Boolean(init.result?.capabilities?.prompts) && Boolean(init.result?.capabilities?.resources), init.result?.serverInfo?.version);
   check('initialize 返回自描述 instructions', (init.result?.instructions || '').includes('session_index_brief'));
   check('声明 listChanged 通知能力', init.result?.capabilities?.resources?.listChanged === true && init.result?.capabilities?.prompts?.listChanged === true);
   notify('notifications/initialized');
 
   const listed = await request('tools/list');
   const names = (listed.result?.tools || []).map((t) => t.name);
-  check('tools/list 返回 13 个工具', names.length === 13 && names.includes('session_index_package'), `${names.length} 个`);
+  check('tools/list 返回 14 个工具', names.length === 14 && names.includes('session_index_stage'), `${names.length} 个`);
   check('ping', (await request('ping')).result !== undefined);
 
   // 自动索引守护 + 文件事件监听
@@ -215,7 +251,7 @@ try {
     check(`resources/read ${uri.split('//')[1]}`, (r.result?.contents?.[0]?.text || '').length > 10);
   }
   const pluginJson = JSON.parse((await request('resources/read', { uri: 'session-index://plugin.json' })).result.contents[0].text);
-  check('插件清单机器可读', pluginJson.mcp?.toolCount === 13 && pluginJson.automatic?.watchNewSessions === true, `v${pluginJson.version}`);
+  check('插件清单机器可读', pluginJson.mcp?.toolCount === 14 && pluginJson.automatic?.watchNewSessions === true, `v${pluginJson.version}`);
   const cardUri = await request('resources/read', { uri: `session-index://card/${firstId.slice(0, 12)}` });
   check('resources/read 单会话卡模板', (cardUri.result?.contents?.[0]?.text || '').includes('"id"'));
 
@@ -225,6 +261,32 @@ try {
   const refreshed = await payload(await call('session_index_refresh', { force: false }));
   check('refresh 手动刷新仍可用', refreshed.ok === true && refreshed.cardsIndexed > 0);
   check('refresh 返回自动维护状态', Boolean(refreshed.autoIndex));
+  // ---- 会话整理 → 思源桥待入库（本地假服务，全程不碰真实 5599 队列）
+  const ov = await payload(await call('session_index_stage', { status: true }));
+  check('stage 只读探测服务与队列', ov.ok === true && ov.kernel === '3.8.9' && ov.queued === 0, JSON.stringify({ kernel: ov.kernel, queued: ov.queued }));
+  check('stage 探测返回自动接入目录', ov.autoStageDir === 'D:/mock/session-docs' && ov.autoStageEnabled === true);
+  check('stage 探测不产生写入', stagePosts.length === 0);
+
+  const prev = await payload(await call('session_index_stage', { query: '插件', template: 'brief', limit: 3 }));
+  check('stage 默认只预览不投递', prev.dryRun === true && prev.staged === false && typeof prev.token === 'string' && stagePosts.length === 0, prev.code || prev.error || '');
+  check('stage 预览含 Markdown 与落点', String(prev.preview || '').includes('# 会话整理') && prev.target?.hpath === '/会话札记/思源');
+  check('stage 预览给出可回传的 confirmWith', prev.confirmWith?.confirmToken === prev.token && typeof prev.confirmWith?.title === 'string');
+
+  const bad = await payload(await call('session_index_stage', { ...prev.confirmWith, confirmToken: 'deadbeef' }));
+  check('stage 错误令牌被拒绝', bad.ok === false && bad.code === 'TOKEN_MISMATCH' && bad.staged === false, bad.code || '');
+  check('stage 拒绝后仍无写入', stagePosts.length === 0);
+
+  const posted = await payload(await call('session_index_stage', prev.confirmWith));
+  check('stage 确认后投递成功', posted.ok === true && posted.staged === true && posted.id === '20261114140000-abcdef' && stagePosts.length === 1, posted.code || posted.error || '');
+  check('stage 投递体含标题与 Markdown', typeof stagePosts[0]?.title === 'string' && String(stagePosts[0]?.markdown || '').includes('# 会话整理'));
+  check('stage 文档声明未写入笔记库', /未写入笔记库/.test(String(stagePosts[0]?.markdown || '')));
+  check('stage 绝不调用 commit', stagePosts.every((p) => !p.__forbidden));
+
+  const dup = await payload(await call('session_index_stage', prev.confirmWith));
+  check('stage 重复投递被去重', dup.alreadyQueued === true && dup.staged === false && stagePosts.length === 1, dup.code || '');
+  const dec = await payload(await call('session_index_stage', { template: 'decisions', limit: 2 }));
+  check('stage decisions 模板可用', dec.dryRun === true && dec.chars > 0);
+
   check('空 query 被规范化拒绝', (await call('session_index_search', { query: '' })).result?.isError === true);
   check('通知通道可用（声明级）', Array.isArray(notifications), `收到 ${notifications.length} 条通知`);
 } catch (err) {
@@ -239,6 +301,7 @@ try {
   }
   child.stdin.end();
   child.kill();
+  mockBridge.close();
 }
 
 const failed = results.filter((r) => !r.ok).length;

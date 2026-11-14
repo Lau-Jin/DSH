@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dsh-session-index 操作使用手册 v2.4.1</title>
+<title>dsh-session-index 操作使用手册 v2.5.0</title>
 <style>
   :root{
     --bg:#f7f9fc; --panel:#ffffff; --panel-2:#f1f5fb; --line:#e2e8f2;
@@ -74,7 +74,7 @@
 <body>
 <div class="layout">
 <aside>
-  <div class="brand">dsh-session-index<small>操作使用手册 · v2.4.1</small></div>
+  <div class="brand">dsh-session-index<small>操作使用手册 · v2.5.0</small></div>
   <input id="q" type="search" placeholder="筛选章节 / 关键词…" autocomplete="off">
   <nav id="nav">
     <div class="grp">开始</div>
@@ -88,7 +88,7 @@
     <a href="#s7">7. 语义检索</a>
     <a href="#s8">8. 自动注入上下文</a>
     <div class="grp">参考</div>
-    <a href="#s9">9. 13 个工具全参考</a>
+    <a href="#s9">9. 14 个工具全参考</a>
     <a href="#s10">10. Prompts / Resources</a>
     <a href="#s11">11. 典型场景操作</a>
     <a href="#s12">12. 配置与命令速查</a>
@@ -102,7 +102,7 @@
   <h1>dsh-session-index 操作使用手册</h1>
   <p>完全化的 MCP 插件：一条命令安装，之后自动配置、自动建索引、<b>新会话由文件事件自动识别（无需重启 DSH）</b>、索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。</p>
   <div class="badges">
-    <span class="badge">版本 <b>v2.4.1</b></span>
+    <span class="badge">版本 <b>v2.5.0</b></span>
     <span class="badge">安装命令 <b>1 条</b></span>
     <span class="badge">会话 <b>32</b>（自动增长）</span>
     <span class="badge">工具 <b>13</b> / 提示词 <b>4</b> / 资源 <b>7+1</b></span>
@@ -114,7 +114,7 @@
 
 <section id="s1" data-kw="概览 架构 是什么 数据流">
   <h2>1. 这是什么</h2>
-  <p>它是一个 <b>MCP (stdio) 插件</b>。DSH 通过内置 <code>dsh-mcp-client</code> 连接它，Agent 就能用 13 个工具查历史。插件自带 <code>install.mjs</code>，自动把连接写进 DSH 配置，<b>不需要手工填表或改 YAML</b>；<code>plugin.json</code> 是机器可读能力清单，<code>dist/*.zip</code> 是可分发包。</p>
+  <p>它是一个 <b>MCP (stdio) 插件</b>。DSH 通过内置 <code>dsh-mcp-client</code> 连接它，Agent 就能用 14 个工具查历史。插件自带 <code>install.mjs</code>，自动把连接写进 DSH 配置，<b>不需要手工填表或改 YAML</b>；<code>plugin.json</code> 是机器可读能力清单，<code>dist/*.zip</code> 是可分发包。</p>
 <pre><button class="copy">复制</button><code>DSH  ~/.dsh/sessions/**/session.v4.jsonl.zstd   (分帧 zstd)
 WorkBuddy  ~/.workbuddy/projects/&lt;工作区&gt;/&lt;会话id&gt;.jsonl
         │  fs.watch 事件 → 防抖 → 后台子进程增量构建
@@ -138,7 +138,7 @@ WorkBuddy  ~/.workbuddy/projects/&lt;工作区&gt;/&lt;会话id&gt;.jsonl
   <table>
     <tr><th>行 id</th><th>包</th><th>作用</th></tr>
     <tr><td><code>session-index-host</code></td><td><code>dsh-session-index</code></td><td>宿主半身 <code>lib/index.mjs</code>：用 <code>import.meta.url</code> 拿到<b>真实安装目录</b>，把 <code>server.mjs</code> 绝对路径写进 <code>~/.dsh/session-index/server-path.txt</code></td></tr>
-    <tr><td><code>mcp-session-index</code></td><td><code>@deepseek-ai/dsh-mcp-client</code></td><td>MCP stdio 客户端：13 工具 / 4 提示词 / 8 资源</td></tr>
+    <tr><td><code>mcp-session-index</code></td><td><code>@deepseek-ai/dsh-mcp-client</code></td><td>MCP stdio 客户端：14 工具 / 4 提示词 / 8 资源</td></tr>
   </table>
   <div class="note"><b>为什么它自己认得路径？</b><code>cordis.patch.yml</code> 里的 <code>command</code>、<code>args</code>、<code>DSH_HOME</code> 三处都是 <code>!!js</code> 表达式，在 DSH <b>加载配置时求值</b>（不是安装时），按「显式环境变量 → 宿主记下的路径文件 → profile 标准安装位置」依次探测。宿主行排在 MCP 行之前，路径文件先落盘，MCP 首次 spawn 就能命中——<b>一次重启即生效</b>。</div>
 
@@ -172,7 +172,7 @@ install.cmd          # Windows 可直接双击；macOS / Linux / Git Bash 用 ./
     <tr><td><code>node install.mjs --uninstall</code></td><td>一键回滚，保留备份</td></tr>
     <tr><td><code>node install.mjs --reset-env</code></td><td>用默认值覆盖 env 自定义</td></tr>
     <tr><td><code>node pack.mjs</code></td><td>重新生成插件包 + 技能包</td></tr>
-    <tr><td><code>node smoke.mjs</code></td><td>66 项端到端自测</td></tr>
+    <tr><td><code>node smoke.mjs</code></td><td>80 项端到端自测</td></tr>
   </table>
 
   <h3>换机器 / 换目录</h3>
@@ -218,7 +218,7 @@ install.cmd          # Windows 可直接双击；macOS / Linux / Git Bash 用 ./
   <h3>插件形态</h3>
   <table>
     <tr><th>文件 / 机制</th><th>作用</th></tr>
-    <tr><td><code>plugin.json</code></td><td>机器可读清单：13 工具、4 prompts、7 resources、自动化配置、包信息、安装方式、依赖与安全声明；也通过 <code>session-index://plugin.json</code> 暴露</td></tr>
+    <tr><td><code>plugin.json</code></td><td>机器可读清单：14 工具、4 prompts、7 resources、自动化配置、包信息、安装方式、依赖与安全声明；也通过 <code>session-index://plugin.json</code> 暴露</td></tr>
     <tr><td><code>package.json</code> 的 <code>dsh.bundle.patch</code></td><td><b>插件页安装的关键</b>：声明 <code>./cordis.patch.yml</code>，DSH 安装器据此接受本包并在启动时自动应用这层 patch</td></tr>
     <tr><td><code>cordis.patch.yml</code></td><td>bundle 层：insert 宿主行 + MCP 行；<code>command</code>/<code>args</code>/<code>DSH_HOME</code> 用 <code>!!js</code> 表达式在加载时求值，安装路径变化无需改文件</td></tr>
     <tr><td><code>lib/index.mjs</code></td><td>宿主半身：<code>import.meta.url</code> 是唯一 100% 可靠的安装路径来源，把 <code>server.mjs</code> 绝对路径写进 <code>server-path.txt</code>，供上面那行 MCP 配置使用</td></tr>
@@ -237,8 +237,8 @@ node pack.mjs verify         # 校验 zip 结构
 session_index_package { "mode": "all" }   # MCP 工具，Agent 也能触发</code></pre>
   <table>
     <tr><th>包</th><th>内容</th><th>用途</th></tr>
-    <tr><td><code>dsh-session-index-v2.4.1.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + 一键脚本 + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
-    <tr><td><code>session-index-skill-v2.4.1.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
+    <tr><td><code>dsh-session-index-v2.5.0.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + 一键脚本 + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
+    <tr><td><code>session-index-skill-v2.5.0.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
   </table>
   <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方解压后运行 <code>node install.mjs</code> 即完成安装。</div>
 </section>
@@ -300,8 +300,8 @@ resources/read { "uri": "session-index://guide" }
 resources/read { "uri": "session-index://package" }</code></pre>
 </section>
 
-<section id="s9" data-kw="工具 参考 参数 13 个">
-  <h2>9. 13 个工具全参考</h2>
+<section id="s9" data-kw="工具 参考 参数 14 个">
+  <h2>9. 14 个工具全参考</h2>
   <table>
     <tr><th>工具</th><th>作用</th><th>主要参数</th></tr>
     <tr><td><code>session_index_status</code></td><td>索引/记忆/检索模式/<b>自动维护与监听状态</b>/分发包</td><td>无</td></tr>
@@ -317,11 +317,12 @@ resources/read { "uri": "session-index://package" }</code></pre>
     <tr><td><code>session_index_package</code></td><td><b>自动打包插件/技能包</b></td><td><code>mode: plugin / skill / all / status</code></td></tr>
     <tr><td><code>session_index_vectors</code></td><td>向量缓存状态/同步/查询</td><td><code>action, query, limit</code></td></tr>
     <tr><td><code>session_index_refresh</code></td><td><b>手动</b>立即刷新；日常由事件+轮询自动维护</td><td><code>force</code></td></tr>
+    <tr><td><code>session_index_stage</code></td><td><b>会话整理 → 思源桥待入库</b>；两步确认、只入队不写库</td><td><code>status, query, sessionIds, app, template, title, hpath, notebook, note, confirmToken</code></td></tr>
   </table>
   <details><summary>通用约定</summary>
     <ul>
       <li>会话 id 支持前缀匹配；时间参数 Unix 毫秒；各 <code>limit</code> 有硬上限。</li>
-      <li>所有工具只读索引；<code>remember/forget/package/refresh</code> 只写派生目录。</li>
+      <li>除 <code>stage</code> 外所有工具只读索引；<code>remember/forget/package/refresh</code> 只写派生目录。<code>stage</code> 只向本机思源桥投递「待入库」稿，<b>不碰思源笔记库</b>。</li>
       <li>错误统一返回 <code>{"error":"中文说明"}</code> 且 <code>isError: true</code>，不泄漏堆栈。</li>
       <li>服务日志走 stderr，stdout 只写 JSON-RPC 与通知。</li>
     </ul>
@@ -390,6 +391,10 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <tr><td><code>SESSION_INDEX_WATCH_DEBOUNCE_MS</code></td><td><code>3500</code></td><td>事件防抖</td></tr>
     <tr><td><code>SESSION_INDEX_WATCH_QUIET_MS</code></td><td><code>6000</code></td><td>事件触发时的静止判定；<b>0 是合法值</b></td></tr>
     <tr><td><code>SESSION_INDEX_EMBED_URL / MODEL / KEY</code></td><td>空</td><td>可选向量；密钥只放环境变量</td></tr>
+    <tr><td><code>SIYUAN_BRIDGE_PORT / SIYUAN_BRIDGE_URL</code></td><td><code>5599</code> / <code>http://127.0.0.1:5599</code></td><td>思源桥地址，<b>只允许回环地址</b></td></tr>
+    <tr><td><code>SESSION_INDEX_STAGE</code></td><td><code>1</code></td><td><code>0</code> 彻底禁用 stage 工具</td></tr>
+    <tr><td><code>SESSION_INDEX_STAGE_TIMEOUT_MS</code></td><td><code>5000</code></td><td>单次请求超时（1000–60000）</td></tr>
+    <tr><td><code>SESSION_INDEX_STAGE_HPATH / _NOTEBOOK</code></td><td><code>/会话札记/思源</code> / <code>思源桥</code></td><td>默认落点</td></tr>
   </table>
   <div class="note">install.mjs 每次运行会把标记块内 <code>env</code> 重写为默认值。手改这些值后<b>不要重跑 install.mjs</b>，否则会被覆盖。</div>
   <h3>命令</h3>
@@ -398,15 +403,35 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <tr><td><code>node install.mjs</code>（含 --verify / --uninstall / --dry-run）</td><td>安装、校验、回滚、预览</td></tr>
     <tr><td><code>node pack.mjs</code>（含 status / verify / plugin / skill）</td><td>自动打包与校验</td></tr>
     <tr><td><code>node build-index.mjs --force</code></td><td>全量重建（改抽取规则后）</td></tr>
-    <tr><td><code>node smoke.mjs</code> / <code>npm run check</code></td><td>66 项自测 / 语法检查</td></tr>
+    <tr><td><code>node smoke.mjs</code> / <code>npm run check</code></td><td>80 项自测 / 语法检查</td></tr>
   </table>
+
+  <h3>会话整理 → 思源桥待入库（v2.5.0）</h3>
+  <p>DSH 插件之间<b>不共享会话数据</b>：会话本体只有一份磁盘文件，各插件各自解析、各存各的目录。会话卡与结论已在 session-index 手里，思源桥又是独立的 HTTP 服务（<code>127.0.0.1:5599</code>），所以一次接口调用即可对接，<b>不必新建第三个插件</b>，也不用再解一遍 zstd。</p>
+  <table>
+    <tr><th>步骤</th><th>调用</th><th>结果</th></tr>
+    <tr><td>1 · 只读探测（可选）</td><td><code>{ "status": true }</code></td><td>内核版本、队列篇数、自动接入目录；零写入</td></tr>
+    <tr><td>2 · 预览（默认）</td><td><code>{ "query": "插件", "template": "brief", "limit": 5 }</code></td><td>返回 <code>title / chars / preview / token / target / confirmWith</code>，<b>不产生任何写入</b></td></tr>
+    <tr><td>3 · 确认后投递</td><td>把上一步的 <code>confirmWith</code> 原样回传</td><td>进入思源桥「待入库」队列，返回 id 与落点</td></tr>
+  </table>
+  <div class="note"><b>令牌绑定内容。</b><code>confirmToken</code> 由「标题 + 落点 + 正文」算出；索引在两次调用间变化、或参数被改动，令牌就失配并拒绝投递（<code>TOKEN_MISMATCH</code>），需重新预览。这样不会出现「预览 A、投递 B」。投递前还会按「标题 + 字数」查队列去重。</div>
+  <table>
+    <tr><th>参数</th><th>说明</th></tr>
+    <tr><td><code>query</code> / <code>sessionIds</code></td><td>主题聚合，或精确指定会话 id（支持前缀）</td></tr>
+    <tr><td><code>app / workspace / since / until</code></td><td>范围过滤</td></tr>
+    <tr><td><code>template</code></td><td><code>brief</code> 速览（默认）/ <code>decisions</code> 只要结论 / <code>detail</code> 附检索片段</td></tr>
+    <tr><td><code>title / hpath / notebook / note</code></td><td>标题与落点；写入前仍可在思源桥界面改</td></tr>
+    <tr><td><code>limit / maxChars</code></td><td>会话数（1–20）与篇幅（1000–30000），文档硬上限 60000 字</td></tr>
+  </table>
+  <div class="tip"><b>安全边界：</b>只调用 <code>/api/status</code>、<code>/api/stage</code>、<code>/api/autostage</code>，<b>绝不调用 <code>/api/stage/commit</code></b>；写进思源笔记库永远由你在界面点确认。服务不可达返回 <code>BRIDGE_UNREACHABLE</code> 结构化错误，不影响其它 13 个工具。</div>
+  <p>实测提醒：思源桥 <code>/api/autostage</code> 返回的实际 <code>session-docs</code> 目录可能与 <code>config.json</code> 的 <code>dataDir</code> 不一致（服务走 <code>SIYUAN_BRIDGE_DATA</code> 推导）。本工具走 HTTP 接口，不受该差异影响。</p>
 </section>
 
 <section id="s13" data-kw="故障 排查 报错 回滚 安全 备份 卸载">
   <h2>13. 故障排查、安全与回滚</h2>
   <table>
     <tr><th>现象</th><th>处理</th></tr>
-    <tr><td>工具列表没出现 / 不是 13 个</td><td>完全退出 DSH 再打开；或 <code>node install.mjs --verify</code></td></tr>
+    <tr><td>工具列表没出现 / 不是 14 个</td><td>完全退出 DSH 再打开；或 <code>node install.mjs --verify</code></td></tr>
     <tr><td>新会话查不到</td><td>等 3~5 秒（事件防抖）；<code>status</code> 看 <code>autoIndex.watch.events</code> 与 <code>lastResult.reason</code>；仍不行手动 <code>refresh</code></td></tr>
     <tr><td>监听未建立（watch.watching=0）</td><td>平台不支持递归监听，60 秒轮询自动兜底；也可用 <code>SESSION_INDEX_WATCH=0</code> 明确关闭</td></tr>
     <tr><td>「索引正在后台自动构建」</td><td>首次启动正常现象，等待几秒</td></tr>
@@ -469,13 +494,13 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
 ├── update.cmd / update.sh      更新：git pull + 重装（保留 env 自定义）
 ├── install.mjs             安装 / 校验 / 回滚 / 自动打包（自动识别 bundle / patch 方式）
 ├── pack.mjs                打包 CLI
-├── server.mjs              MCP 服务：13 工具 + 4 prompts + resources + 通知
+├── server.mjs              MCP 服务：14 工具 + 4 prompts + resources + 通知
 ├── cordis.patch.yml        bundle 层：挂宿主行 + MCP 行（!!js 自解析命令与路径）
 ├── build-index.mjs         多源增量构建器（--quiet 静止期）
-├── smoke.mjs               66 项端到端自测
+├── smoke.mjs               80 项端到端自测
 ├── icon.svg                插件页图标（卡片 + 放大镜，64×64 SVG，938 字节）
 ├── plugin.json             机器可读插件能力清单（含安装方式与仓库信息）
-├── package.json            v2.4.1 / icon / dsh.bundle.patch / dsh.plugin / 脚本
+├── package.json            v2.5.0 / icon / dsh.bundle.patch / dsh.plugin / 脚本
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能
@@ -492,8 +517,9 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     ├── semantic.mjs        同义扩展 + BM25 + RRF
     ├── embedding.mjs       可选向量嵌入与缓存
     ├── notes.mjs           长期记忆库
-    └── index-store.mjs     各类 JSON 文档与分片读写</code></pre>
-  <h3>验证记录（2026-11-13，v2.4.1）</h3>
+    ├── index-store.mjs     各类 JSON 文档与分片读写
+    └── stage.mjs            会话整理文档渲染 + 思源桥待入库投递</code></pre>
+  <h3>验证记录（2026-11-13 ~ 14）</h3>
   <table>
     <tr><th>项</th><th>结果</th></tr>
     <tr><td>bundle patch 语法与求值</td><td>用 DSH 自带的 js-yaml 复刻 <code>!!js</code> 标量 + cordis 的 <code>with (ctx) { eval(expr) }</code> 求值链：YAML 解析通过、2 个 insert 条目正确、<code>command</code> 解析到 DSH 自带 node（v24.21.0，含 zstd）</td></tr>
@@ -504,11 +530,14 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     <tr><td>重装保留配置</td><td>重复安装显示「保留 env 6 项」，配置块无变更、不产生重复条目；<code>--reset-env</code> 可显式重置</td></tr>
     <tr><td>新会话免重启</td><td>临时目录写入新会话 → <code>fs-event</code> → 重建 1 个 / 70ms → 通知 → <code>list</code>/<code>search</code> 立即可查；默认静止期 6000 下同样通过</td></tr>
     <tr><td>自动打包</td><td>插件包 29 文件（含 <code>cordis.patch.yml</code> 与 <code>lib/index.mjs</code>），技能包 3 文件；系统 <code>Expand-Archive</code> 解压成功，0 敏感文件，CRC 与中央目录有效</td></tr>
-    <tr><td>全量冒烟</td><td><b>66/66 通过</b>；全量语法检查通过；手册自包含 14 章</td></tr>
+    <tr><td>全量冒烟</td><td><b>80/80 通过</b>；全量语法检查通过；手册自包含 14 章</td></tr>
     <tr><td>环境体检（v2.4.1）</td><td><code>--doctor</code> 在干净环境 7 项全绿；构造「镜像重写 + <code>fetch-timeout=900000</code> + 远端 git 依赖 + lockfile 残留 <code>git+ssh</code>」的坏环境后，四类问题全部命中并给出修法，退出码 1</td></tr>
     <tr><td>pnpm 超时上限</td><td>实测 <code>fetch-timeout</code>：60000 正常、65000 起报 <code>UND_ERR_INVALID_ARG</code>（与 undici 的参数上限有关），故不建议调大</td></tr>
     <tr><td>本地化后离线安装</td><td>6 个依赖改 <code>link:</code> 后：全新目录 <code>--offline --frozen-lockfile</code> 整装 <b>2.8 秒</b>；真实 profile 同步 <b>8.3 秒</b>，零远端 git 依赖</td></tr>
     <tr><td>从仓库地址安装</td><td>模拟插件页「输入仓库地址」安装 <code>Lau-Jin/DSH</code>：成功装出 <code>dsh-session-index 2.4.1</code>，<code>cordis.patch.yml</code> / <code>lib/index.mjs</code> / <code>server.mjs</code> 均在包内（耗时约 99 秒，主要是 GitHub git 往返）</td></tr>
+    <tr><td>stage 两步确认（v2.5.0）</td><td>本地起假思源桥（<code>node:http</code>，不碰真实 5599 队列）：只读探测零写入 → 默认预览不投递 → 错误令牌 <code>TOKEN_MISMATCH</code> 拒绝 → 回传 <code>confirmWith</code> 成功入队 → 重复投递被去重 → 全程<b>零次 commit</b>，投递正文含「未写入笔记库」声明</td></tr>
+    <tr><td>stage 真实服务只读</td><td><code>GET /api/status</code> / <code>/api/stage</code> / <code>/api/autostage</code> 实测可达：内核 3.8.9、待入库 0 篇、<code>autoStage=true</code>；本轮未产生任何写入</td></tr>
+    <tr><td>索引并发写加固</td><td>多进程同时写索引时 Windows <code>rename</code> 偶发 <code>EPERM</code> → 原子写加 0/40/120/300ms 退避重试；<b>80/80 冒烟全绿</b></td></tr>
   </table>
   <h3>版本演进</h3>
   <ul>
@@ -518,10 +547,11 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     <li><b>v2.3.0</b> 仓库化分发：<code>Lau-Jin/DSH</code> 只存本插件、仓库根即插件根，新增 <code>install.cmd/sh</code> 与 <code>update.cmd/sh</code> 一键入口；重装自动保留手工改过的 env。</li>
     <li><b>v2.4.0</b> <b>插件页直接安装</b>：声明 <code>dsh.bundle.patch</code> + 新增 <code>cordis.patch.yml</code>（<code>!!js</code> 自解析命令与路径）+ 新增宿主半身 <code>lib/index.mjs</code>；装到哪都不用改配置，一次重启生效。仓库转公开。<code>install.mjs</code> 自动识别 bundle 模式，避免重复注册。</li>
     <li><b>v2.4.1</b> 新增 <code>install.mjs --doctor</code> <b>环境体检</b>（7 项，只读），把「插件页装不上」的四个真实成因变成可自动定位的检查项：git URL 重写镜像、pnpm <code>fetch-timeout</code> 超上限、远端大 tarball、lockfile 残留 <code>git+ssh</code>。手册第 13 章补充三条实测坑与修法。</li>
+    <li><b>v2.5.0</b> 新增第 14 个工具 <code>session_index_stage</code>：<b>会话整理文档 → 思源桥待入库</b>。两步确认（预览给令牌，回传 <code>confirmWith</code> 才投递）、标题+字数去重、三种模板与落点可配；只入队，<b>绝不自动写库</b>。第 12 章补完整用法。</li>
   </ul>
 </section>
 
-<footer>dsh-session-index v2.4.1 · 操作使用手册 · 生成于 2026-11-13 · 零第三方依赖</footer>
+<footer>dsh-session-index v2.5.0 · 操作使用手册 · 生成于 2026-11-13 · 零第三方依赖</footer>
 </main>
 </div>
 <script>

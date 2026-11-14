@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-index",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "icon": "icon.svg",
   "displayName": {
     "zh": "全会话索引与跨会话记忆",
@@ -34,7 +34,7 @@
     "entry": "server.mjs",
     "resolvedBy": "cordis.patch.yml 的 !!js 表达式（按 环境变量 → 宿主记下的路径文件 → profile 标准安装位置 依次探测）",
     "capabilities": ["tools", "prompts", "resources", "instructions", "listChanged"],
-    "toolCount": 13,
+    "toolCount": 14,
     "tools": [
       "session_index_status",
       "session_index_brief",
@@ -48,7 +48,8 @@
       "session_index_forget",
       "session_index_package",
       "session_index_vectors",
-      "session_index_refresh"
+      "session_index_refresh",
+      "session_index_stage"
     ],
     "prompts": ["session-context", "resume-topic", "catch-up", "quickstart"],
     "resources": [
@@ -83,8 +84,8 @@
   },
   "packages": {
     "directory": "dist",
-    "plugin": "dsh-session-index-v2.4.1.zip",
-    "skill": "session-index-skill-v2.4.1.zip",
+    "plugin": "dsh-session-index-v2.5.0.zip",
+    "skill": "session-index-skill-v2.5.0.zip",
     "generator": "lib/pack.mjs (zero dependency ZIP writer)",
     "contents": ["MANIFEST.json", "INSTALL.md"],
     "excludes": ["会话索引分片 *.jsonl.gz", "meta/cards/notes/vectors.json", "备份与临时文件", "已有 zip"]

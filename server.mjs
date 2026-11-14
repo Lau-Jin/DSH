@@ -26,9 +26,10 @@ import { loadNotes, saveNotes, addNote, queryNotes, removeNote, noteChunks, note
 import { expandQuery, matchesQuery, rankCandidates, rrfMerge, makeSnippet } from './lib/semantic.mjs';
 import { embeddingConfig, syncVectors, vectorRank, cardChunks, vectorStats } from './lib/embedding.mjs';
 import { pack, packAll, listPacks } from './lib/pack.mjs';
+import { stageConfig, buildStageDocument, stageToken, bridgeOverview, findDuplicate, postStage, StageError } from './lib/stage.mjs';
 
 const { sessionsRoot, indexDir, workbuddyProjectsDir } = defaultPaths();
-const VERSION = '2.4.1';
+const VERSION = '2.5.0';
 const SUPPORTED_PROTOCOLS = new Set(['2024-11-05', '2025-03-26', '2025-06-18']);
 const log = (...parts) => process.stderr.write(`[dsh-session-index] ${parts.join(' ')}\n`);
 
@@ -557,6 +558,130 @@ async function toolRefresh(args = {}) {
   }
 }
 
+/**
+ * 控制器：会话整理文档 → 思源桥待入库队列。
+ * 只负责解析参数、组装源数据、格式化响应；渲染与 HTTP 都在 lib/stage.mjs。
+ * 两步确认：不带 confirmToken 一律只预览，带对 token 才投递；永不写库。
+ */
+async function toolStage(args = {}) {
+  const cfg = stageConfig();
+  if (!cfg.enabled) {
+    return { ok: false, code: 'STAGE_DISABLED', error: '暂存投递已被关闭', hint: '设置 SESSION_INDEX_STAGE=1 后重启 MCP 服务' };
+  }
+  const asError = (err) => (err instanceof StageError ? err.toJSON()
+    : { ok: false, code: 'STAGE_FAILED', error: String(err.message || err) });
+
+  if (args.status === true) {
+    try {
+      return await bridgeOverview(cfg);
+    } catch (err) {
+      return asError(err);
+    }
+  }
+
+  const template = ['brief', 'decisions', 'detail'].includes(args.template) ? args.template : 'brief';
+  const app = args.app || 'all';
+  const query = typeof args.query === 'string' ? args.query.trim() : '';
+  const workspace = typeof args.workspace === 'string' ? args.workspace.trim() : '';
+  const limit = clamp(args.limit, 1, 20, 8);
+  const maxChars = clamp(args.maxChars, 1000, 30000, 12000);
+  const ids = Array.isArray(args.sessionIds) ? args.sessionIds.filter((x) => typeof x === 'string' && x.trim()) : [];
+
+  // 源数据：指定会话时直接取卡片，否则用 brief 的最近/主题聚合
+  let sessions;
+  let memories;
+  if (ids.length) {
+    const cards = Object.values(freshCards().cards || {});
+    const picked = cards.filter((c) => ids.some((p) => String(c.id || '').startsWith(p))).slice(0, 20);
+    sessions = picked.map((c) => ({
+      id: c.id, app: appOf(c), title: c.title, updatedAt: c.updatedAt, digest: c.digest,
+      decisions: (c.decisions || []).slice(0, 3), questions: (c.questions || []).slice(0, 1),
+      keywords: (c.keywords || []).slice(0, 6),
+    }));
+    memories = queryNotes(freshNotes(), { query, limit: 5 })
+      .map((r) => ({ type: r.note.type, text: String(r.note.text).slice(0, 200), importance: r.note.importance }));
+  } else {
+    const brief = toolBrief({ query, app, workspace, limit, maxChars, includeMemory: true });
+    sessions = brief.sessions || [];
+    memories = brief.memories || [];
+  }
+  if (args.since || args.until) {
+    const since = Number(args.since) || 0;
+    const until = Number(args.until) || Infinity;
+    sessions = sessions.filter((s) => (s.updatedAt || 0) >= since && (s.updatedAt || 0) <= until);
+  }
+
+  let hits = [];
+  if (template === 'detail' && (query || ids.length)) {
+    try {
+      const sr = query ? await toolSearch({ query, app, workspace, mode: 'semantic', limit: 8, contextChars: 260 }) : null;
+      hits = (sr?.results || []).map((r) => ({
+        title: r.title, sessionId: r.sessionId, app: r.app, seq: r.seq,
+        snippet: r.snippet || r.text || '',
+      }));
+    } catch (err) {
+      log('stage detail 片段检索降级: ' + err.message);
+    }
+  }
+
+  const payloadOpts = {
+    notebook: args.notebook || cfg.defaultNotebook,
+    hpath: args.hpath || cfg.defaultHpath,
+    note: typeof args.note === 'string' ? args.note : '',
+    template,
+  };
+  let doc;
+  try {
+    doc = buildStageDocument({ sessions, memories, hits }, {
+      ...payloadOpts, query, title: typeof args.title === 'string' ? args.title : '', app,
+    });
+  } catch (err) {
+    return asError(err);
+  }
+  const token = stageToken(doc, payloadOpts);
+
+  // 第一步：只预览，绝不产生任何写操作
+  if (!args.confirmToken) {
+    return {
+      ok: true, dryRun: true, staged: false, token,
+      title: doc.title, chars: doc.chars, template,
+      sessions: sessions.length, memories: memories.length, hits: hits.length,
+      target: { service: cfg.url, notebook: payloadOpts.notebook, hpath: payloadOpts.hpath },
+      preview: doc.markdown.slice(0, 1200),
+      previewTruncated: doc.markdown.length > 1200,
+      confirmWith: {
+        query, app, workspace, template, title: doc.title, sessionIds: ids.length ? ids : undefined,
+        since: args.since, until: args.until, limit, maxChars,
+        notebook: args.notebook, hpath: args.hpath, note: args.note, confirmToken: token,
+      },
+      hint: '仅预览，未投递。确认无误后把 confirmWith 原样作为本工具参数再调一次；本工具永远不会自动写入思源笔记库',
+    };
+  }
+
+  // 第二步：令牌必须匹配（防止预览 A、投递 B）
+  if (String(args.confirmToken) !== token) {
+    return {
+      ok: false, code: 'TOKEN_MISMATCH', staged: false,
+      error: '确认令牌与当前内容不一致，已拒绝投递',
+      hint: '索引可能刚更新或参数被改动。请重新预览，并原样带回新的 confirmWith',
+    };
+  }
+
+  try {
+    const dup = await findDuplicate(cfg, doc);
+    if (dup) {
+      return {
+        ok: true, staged: false, alreadyQueued: true, id: dup.id, title: doc.title, chars: doc.chars,
+        hint: '待入库队列里已有同标题同字数的稿，未重复投递',
+      };
+    }
+    const result = await postStage(cfg, doc, payloadOpts);
+    return { ...result, token, sessions: sessions.length, template, duplicateChecked: true };
+  } catch (err) {
+    return asError(err);
+  }
+}
+
 const HANDLERS = {
   session_index_status: toolStatus,
   session_index_brief: toolBrief,
@@ -571,6 +696,7 @@ const HANDLERS = {
   session_index_package: toolPackage,
   session_index_vectors: toolVectors,
   session_index_refresh: toolRefresh,
+  session_index_stage: toolStage,
 };
 
 // ---------------------------------------------------------------- MCP 声明与自描述
@@ -589,6 +715,8 @@ const GUIDE_TEXT = `# dsh-session-index 使用说明
 - 沉淀结论：session_index_remember；召回：session_index_recall；归档：session_index_forget。
 - 打包分发：session_index_package（plugin / skill / all，自动生成 zip）。
 - 查看索引与自动维护状态：session_index_status（autoIndex.watch 可看事件监听状态）。
+- 会话整理成文档送进思源：session_index_stage（两步确认，只投递到「待入库」）。
+- 探测思源桥服务与队列：session_index_stage {status:true}（只读）。
 
 ## 铁律
 1. 逐级放大：brief → related/thread → search(片段) → get(原文)。
@@ -610,6 +738,7 @@ const INSTRUCTIONS = [
   '会话开始或用户提到「之前/上次/继续/记得」时，先调 session_index_brief 接上跨会话结论与长期记忆。',
   '找具体报错或命令用 session_index_search（默认语义检索，只返回片段）；看完整原文用 session_index_get 传 seqs。',
   '有新结论时用 session_index_remember 沉淀；需要分发时用 session_index_package 自动打包。',
+  '要把会话整理成文档送进思源笔记时，用 session_index_stage：先不带 confirmToken 预览，用户确认后原样回传 confirmWith 才投递到「待入库」；绝不自动写库。',
   '完整说明见资源 session-index://guide，不要直接读取 .zstd 源会话文件。',
 ].join(' ');
 
@@ -627,6 +756,7 @@ const TOOLS = [
   { name: 'session_index_package', description: '【自动打包】无需手工压缩，一键生成可分发 zip。mode=plugin 打完整插件包，skill 打技能包（可直接导入 DSH 技能管理器），all 两种都打，status 查看已生成包。包内自动附 MANIFEST.json 与 INSTALL.md，且排除所有会话数据/索引/密钥。', inputSchema: { type: 'object', properties: { mode: { type: 'string', description: 'plugin / skill / all(默认) / status' } }, additionalProperties: false } },
   { name: 'session_index_vectors', description: '【可选向量层】查看/同步/查询向量缓存。未配置 SESSION_INDEX_EMBED_* 时本地语义检索照常工作且零成本。', inputSchema: { type: 'object', properties: { action: { type: 'string', description: 'status/sync/search' }, query: { type: 'string' }, limit: { type: 'number' } }, additionalProperties: false } },
   { name: 'session_index_refresh', description: '手动立即刷新索引。注意：新会话已由文件事件自动识别，通常无需调用；仅改抽取规则或需即时生效时用。', inputSchema: { type: 'object', properties: { force: { type: 'boolean' } }, additionalProperties: false } },
+  { name: 'session_index_stage', description: '【会话整理 → 思源桥待入库】把会话卡/结论/检索片段整理成 Markdown 文档。两步确认：不带 confirmToken 只返回预览与令牌，原样回传 confirmWith 才投递到思源桥 /api/stage；绝不自动写入思源笔记库。支持指定会话、主题、模板、落点与去重。status=true 只读探测服务与队列。', inputSchema: { type: 'object', properties: { status: { type: 'boolean', description: '只读：探测思源桥服务与待入库队列' }, query: { type: 'string', description: '主题词，按主题聚合会话' }, sessionIds: { type: 'array', items: { type: 'string' }, description: '指定会话 id（支持前缀），不传则按最近/主题取' }, app: { type: 'string', description: 'dsh / workbuddy / all' }, workspace: { type: 'string' }, since: { type: 'number' }, until: { type: 'number' }, template: { type: 'string', description: 'brief(默认) / decisions / detail' }, title: { type: 'string', description: '自定义文档标题；确认时请回传预览给出的 title' }, notebook: { type: 'string' }, hpath: { type: 'string', description: '目标目录，默认 /会话札记/思源' }, note: { type: 'string' }, limit: { type: 'number' }, maxChars: { type: 'number' }, confirmToken: { type: 'string', description: '预览返回的令牌；带上且匹配才真正投递' } }, additionalProperties: false } },
 ];
 
 const PROMPTS = [

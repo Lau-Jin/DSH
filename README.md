@@ -5,9 +5,9 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.4.1** |
+| 版本 | **v2.5.0** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
-| MCP 能力 | **13 个工具** / 4 个提示词 / 8 个资源 |
+| MCP 能力 | **14 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
 | 完整手册 | [`操作使用手册.html`](./操作使用手册.html)（单页 14 章，导航 / 搜索 / 一键复制） |
 
@@ -42,7 +42,7 @@ DSH 的会话存在 `~/.dsh/sessions/` 下，是**上千个独立 zstd 帧拼接
 | 行 id | 包 | 作用 |
 |---|---|---|
 | `session-index-host` | `dsh-session-index` | 宿主半身（`lib/index.mjs`）：用 `import.meta.url` 解析**真实安装目录**，把 `server.mjs` 绝对路径写进 `~/.dsh/session-index/server-path.txt` |
-| `mcp-session-index` | `@deepseek-ai/dsh-mcp-client` | MCP stdio 客户端：13 工具 / 4 提示词 / 8 资源 |
+| `mcp-session-index` | `@deepseek-ai/dsh-mcp-client` | MCP stdio 客户端：14 工具 / 4 提示词 / 8 资源 |
 
 那行配置里的 `command`、`args`、`DSH_HOME` 三处都是 `!!js` 表达式，**在 DSH 加载配置时求值**（不是安装时），
 按「显式环境变量 → 宿主记下的路径文件 → profile 标准安装位置」依次探测。
@@ -176,6 +176,7 @@ node install.mjs --doctor
 | `session_index_refresh` | 手动增量刷新 |
 | `session_index_package` | 重新生成分发包 |
 | `session_index_vectors` | 可选的向量索引管理 |
+| `session_index_stage` | 会话整理成 Markdown → 思源桥「待入库」（两步确认，绝不自动写库） |
 
 另提供提示词 `session-context` / `resume-topic` / `catch-up` / `quickstart`，
 资源 `session-index://guide`、`://plugin.json`、`://status`、`://brief`、`://memory` 等。
@@ -183,6 +184,71 @@ node install.mjs --doctor
 
 **搜索模式**：`semantic`（默认，本地同义词扩展 + BM25，零 token）、`keyword`（精确 AND）、
 `hybrid` / `vector`（需配置 embedding，未配置自动降级为本地语义检索）。
+
+---
+
+## 会话整理 → 思源桥「待入库」
+
+`session_index_stage` 把索引里的会话卡、结论、检索片段整理成一篇 Markdown，**投递到思源桥的待入库队列**。
+它只做「投递」这一步，**绝不调用 `/api/stage/commit`**——写进思源笔记库永远由你在思源桥界面点确认。
+
+### 为什么不用再做一个插件
+
+DSH 的插件之间**不共享会话数据**：会话本体只有一份磁盘文件，各插件各自解析、各自维护私有目录。
+但会话卡与结论已经在 `session-index` 手里，而思源桥是独立的 HTTP 服务（默认 `127.0.0.1:5599`），
+所以一次 HTTP 调用就能对接，不需要 DSH 内核级的插件通信，更不需要第三个插件重新解一遍 zstd。
+
+### 三步用法
+
+```text
+1) 只读探测（可选）
+   session_index_stage { "status": true }
+   → 返回思源桥内核版本、队列篇数、自动接入目录
+
+2) 预览（默认，不产生任何写入）
+   session_index_stage { "query": "插件", "template": "brief", "limit": 5 }
+   → 返回 title / chars / preview / token / target / confirmWith
+
+3) 用户看过预览、点头后，把 confirmWith 原样回传
+   session_index_stage { ...confirmWith }
+   → 投递到「待入库」；返回 id 与落点
+```
+
+第 2 步**永远只是预览**。第 3 步的 `confirmToken` 绑定了「标题 + 落点 + 正文」，
+参数被改动或索引刚更新导致内容变化时令牌失配，会直接拒绝投递并要求重新预览——不会出现「预览 A、投递 B」。
+
+### 主要参数
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `status` | false | 只读探测服务与队列，不做任何写入 |
+| `query` | 空 | 主题词，按主题聚合会话 |
+| `sessionIds` | 空 | 精确指定会话 id（支持前缀），不传则取最近/相关会话 |
+| `app` / `workspace` / `since` / `until` | all / 空 | 范围过滤 |
+| `template` | `brief` | `brief` 速览 / `decisions` 只要结论 / `detail` 附检索片段 |
+| `title` | 自动生成 | 自定义文档标题（确认时回传预览给出的值） |
+| `hpath` / `notebook` | `/会话札记/思源` / `思源桥` | 落点；**写入前仍可在思源桥界面改** |
+| `note` / `limit` / `maxChars` | 自动 / 8 / 12000 | 备注、会话数、篇幅上限 |
+| `confirmToken` | 空 | 预览返回的令牌；带上且匹配才真正投递 |
+
+### 环境变量
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `SIYUAN_BRIDGE_PORT` / `SIYUAN_BRIDGE_URL` | `5599` / `http://127.0.0.1:5599` | 服务地址；**只允许回环地址**，不接受任意内网 URL |
+| `SESSION_INDEX_STAGE` | `1` | 设 `0` 彻底禁用该工具 |
+| `SESSION_INDEX_STAGE_TIMEOUT_MS` | `5000` | 单次请求超时（1000–60000） |
+| `SESSION_INDEX_STAGE_HPATH` / `_NOTEBOOK` | `/会话札记/思源` / `思源桥` | 默认落点 |
+
+### 安全边界
+
+- 只调用 `/api/status`、`/api/stage`（GET/POST）、`/api/autostage`，**不调用 commit**
+- 投递前按「标题 + 字数」查队列，已有同稿则不重复入队
+- 服务不可达时返回结构化错误（`BRIDGE_UNREACHABLE`），不抛堆栈、不影响其它 13 个工具
+- 文档硬上限 60000 字；Markdown 里明确标注「未写入笔记库」
+
+> 实测提醒：思源桥 `/api/autostage` 返回的实际 `session-docs` 目录可能与 `config.json` 里的
+> `dataDir` 不一致（服务走 `SIYUAN_BRIDGE_DATA` 推导）。本工具走 HTTP 接口，不受这个差异影响。
 
 ---
 
@@ -202,7 +268,7 @@ node install.mjs --verify        # 6 项状态校验
 node install.mjs --dry-run       # 预览改动，不写文件
 node install.mjs --uninstall     # 移除配置块与自动装的 Skill（先备份）
 node install.mjs --reset-env     # 用默认值覆盖 env 自定义
-node smoke.mjs                   # 66 项端到端自测
+node smoke.mjs                   # 80 项端到端自测
 ```
 
 ---
@@ -213,8 +279,8 @@ node smoke.mjs                   # 66 项端到端自测
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.4.1.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
-| `dist/session-index-skill-v2.4.1.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.5.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
+| `dist/session-index-skill-v2.5.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可随时 `node pack.mjs` 重打，或调 MCP 工具 `session_index_package`。
@@ -248,12 +314,12 @@ node smoke.mjs                   # 66 项端到端自测
 
 ```text
 dsh-session-index/                  # 仓库根 = 插件根
-├── server.mjs                      # MCP stdio server（13 工具 / prompts / resources）
+├── server.mjs                      # MCP stdio server（14 工具 / prompts / resources）
 ├── cordis.patch.yml                # bundle patch：挂宿主行 + MCP 行（含 !!js 自解析路径）
 ├── build-index.mjs                 # 索引构建（多帧 zstd → 可检索记录 + 会话卡）
 ├── install.mjs                     # 安装 / 校验 / 卸载 / 自动打包
 ├── pack.mjs                        # 打包 CLI（零依赖 ZIP writer）
-├── smoke.mjs                       # 66 项端到端自测
+├── smoke.mjs                       # 80 项端到端自测
 ├── install.cmd / install.sh        # 一键安装（双击 / 执行）
 ├── update.cmd / update.sh          # 更新（git pull + 重装）
 ├── icon.svg                        # 插件页图标（package.json 的 icon 字段指向它）
@@ -272,7 +338,8 @@ dsh-session-index/                  # 仓库根 = 插件根
 │   ├── notes.mjs                   # 长期记忆库
 │   ├── auto.mjs                    # 自动建索引 / 定时刷新
 │   ├── watch.mjs                   # 文件事件监听
-│   └── pack.mjs                    # ZIP writer
+│   ├── pack.mjs                    # ZIP writer
+│   └── stage.mjs                   # 会话整理 → 思源桥待入库（渲染 + HTTP 投递）
 ├── skill/SKILL.md                  # 自动接入用技能
 └── dist/                           # 自动生成的分发包（git 忽略）
 ```
@@ -303,6 +370,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 
 | 版本 | 变更 |
 |---|---|
+| **v2.5.0** | 新增第 14 个工具 `session_index_stage`：**会话整理文档 → 思源桥「待入库」队列**。两步确认（预览返回令牌，原样回传 `confirmWith` 才投递）、按标题+字数去重、支持主题/指定会话/三种模板/落点配置，**绝不自动写入思源笔记库**。读取状态与队列可传 `status: true`。 |
 | **v2.4.1** | 新增 `install.mjs --doctor` **环境体检**（7 项，只读），覆盖插件页安装失败的四个真实成因：git URL 重写镜像、pnpm `fetch-timeout` 超上限、远端大 tarball、lockfile 残留 `git+ssh`。README 增加「插件页装不上」排障章节。 |
 | **v2.4.0** | 支持 **DSH 插件页直接安装**：新增 `dsh.bundle.patch` 声明与 `cordis.patch.yml`（含 `!!js` 自解析表达式），新增宿主半身 `lib/index.mjs`。安装路径由运行时探测，不再依赖手工配置；`install.mjs` 自动识别 bundle 模式，避免与插件页安装重复注册。仓库转公开。 |
 | v2.3.0 | 仓库收敛为单插件，仓库根即插件根；新增 `install.cmd/sh`、`update.cmd/sh`；重装保留手工改过的 env。 |
