@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dsh-session-index 操作使用手册 v2.5.1</title>
+<title>dsh-session-index 操作使用手册 v2.5.2</title>
 <style>
   :root{
     --bg:#f7f9fc; --panel:#ffffff; --panel-2:#f1f5fb; --line:#e2e8f2;
@@ -74,7 +74,7 @@
 <body>
 <div class="layout">
 <aside>
-  <div class="brand">dsh-session-index<small>操作使用手册 · v2.5.1</small></div>
+  <div class="brand">dsh-session-index<small>操作使用手册 · v2.5.2</small></div>
   <input id="q" type="search" placeholder="筛选章节 / 关键词…" autocomplete="off">
   <nav id="nav">
     <div class="grp">开始</div>
@@ -102,7 +102,7 @@
   <h1>dsh-session-index 操作使用手册</h1>
   <p>完全化的 MCP 插件：一条命令安装，之后自动配置、自动建索引、<b>新会话由文件事件自动识别（无需重启 DSH）</b>、索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。</p>
   <div class="badges">
-    <span class="badge">版本 <b>v2.5.1</b></span>
+    <span class="badge">版本 <b>v2.5.2</b></span>
     <span class="badge">安装命令 <b>1 条</b></span>
     <span class="badge">会话 <b>32</b>（自动增长）</span>
     <span class="badge">工具 <b>14</b> / 提示词 <b>4</b> / 资源 <b>7+1</b></span>
@@ -237,8 +237,8 @@ node pack.mjs verify         # 校验 zip 结构
 session_index_package { "mode": "all" }   # MCP 工具，Agent 也能触发</code></pre>
   <table>
     <tr><th>包</th><th>内容</th><th>用途</th></tr>
-    <tr><td><code>dsh-session-index-v2.5.1.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + 一键脚本 + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
-    <tr><td><code>session-index-skill-v2.5.1.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
+    <tr><td><code>dsh-session-index-v2.5.2.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + 一键脚本 + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
+    <tr><td><code>session-index-skill-v2.5.2.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
   </table>
   <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方解压后运行 <code>node install.mjs</code> 即完成安装。</div>
 </section>
@@ -509,7 +509,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
 ├── smoke.mjs               80 项端到端自测
 ├── icon.svg                插件页图标（卡片 + 放大镜，64×64 SVG，938 字节）
 ├── plugin.json             机器可读插件能力清单（含安装方式与仓库信息）
-├── package.json            v2.5.1 / icon / dsh.bundle.patch / dsh.plugin / 脚本
+├── package.json            v2.5.2 / icon / dsh.bundle.patch / dsh.plugin / 脚本
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能
@@ -561,10 +561,11 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     <li><b>v2.4.1</b> 新增 <code>install.mjs --doctor</code> <b>环境体检</b>（7 项，只读），把「插件页装不上」的四个真实成因变成可自动定位的检查项：git URL 重写镜像、pnpm <code>fetch-timeout</code> 超上限、远端大 tarball、lockfile 残留 <code>git+ssh</code>。手册第 13 章补充三条实测坑与修法。</li>
     <li><b>v2.5.0</b> 新增第 14 个工具 <code>session_index_stage</code>：<b>会话整理文档 → 思源桥待入库</b>。两步确认（预览给令牌，回传 <code>confirmWith</code> 才投递）、标题+字数去重、三种模板与落点可配；只入队，<b>绝不自动写库</b>。第 12 章补完整用法。</li>
     <li><b>v2.5.1</b> <code>tools/push-doc.mjs</code> 新增 <code>--from-workbuddy</code> <b>批量模式</b>：扫描 WorkBuddy 全部会话生成的文档，内容哈希去重 + 排除临时目录 + 同名查重后一次投递；默认只读预览。实测 22 篇全部入队、重复执行全被拦截。README 补「插件怎么更新」：本机为 npm registry 来源（<code>dsh-session-index-lau</code>），插件页<b>有「更新」按钮、无需卸载重装</b>。<b>同版修订</b>：批量判重改为持久化状态文件（<code>push-doc-state.json</code>），丢弃后不重新推送、内容更新才投新版；新增 <code>--seed</code>。</li>
+    <li><b>v2.5.2</b> <b>发布流程标准化</b>：新增发布前 / 安装后核验门禁 <code>dist/publish/check-release.mjs</code>（语法、80 项冒烟、功能核验、四处版本统一、MCP 握手），核验未全绿禁止推进；标准流程文档同步批量推送 / 持久化判重 / 定时自动化机制与版本统一矩阵；把源仓库的判重脚本同步进发布包与 DSH 安装，消除「同号不同内容」分叉。</li>
   </ul>
 </section>
 
-<footer>dsh-session-index v2.5.1 · 操作使用手册 · 生成于 2026-11-14 · 零第三方依赖</footer>
+<footer>dsh-session-index v2.5.2 · 操作使用手册 · 生成于 2026-11-14 · 零第三方依赖</footer>
 </main>
 </div>
 <script>

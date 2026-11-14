@@ -5,7 +5,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.5.1** |
+| 版本 | **v2.5.2** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
 | MCP 能力 | **14 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
@@ -308,7 +308,7 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 npm registry 来源**：profile 依赖 `dsh-session-index-lau: ^2.5.1`，
+**本机当前是 npm registry 来源**：profile 依赖 `dsh-session-index-lau: ^2.5.2`，
 属于上表第一行，所以插件页**有「版本」区块与「更新」按钮**——以后发新版后
 **点更新即可，不需要卸载重装**。命令行 `pnpm update <包名>` 与点按钮是同一条路径。
 
@@ -358,8 +358,8 @@ node smoke.mjs                   # 80 项端到端自测
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.5.1.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
-| `dist/session-index-skill-v2.5.1.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.5.2.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
+| `dist/session-index-skill-v2.5.2.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可随时 `node pack.mjs` 重打，或调 MCP 工具 `session_index_package`。
@@ -450,6 +450,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 
 | 版本 | 变更 |
 |---|---|
+| **v2.5.2** | 发布流程标准化：新增发布前/后核验门禁（`dist/publish/check-release.mjs`），把「检查并核验 → 确认版本可用 → 才推进标准流程」固化为强制步骤；标准流程文档同步新机制（批量推送、持久化判重、定时自动化）与版本统一矩阵。把源仓库已生效的持久化判重脚本同步进发布包与 DSH 安装，消除「同版本号、内容不同」的分叉。 |
 | **v2.5.1** | `tools/push-doc.mjs` 增加 **`--from-workbuddy` 批量模式**：扫描 WorkBuddy 全部会话产出的文档，按内容哈希去重、排除临时/依赖目录、逐篇查重后一次性投递到思源桥待入库；默认只读预览，`--send` 才入队，`--no-exclude` / `--include-txt` / `--source` / `--limit` / `--since` / `--force` 可控。修掉按 `chars` 判重不稳的问题（思源桥会规整正文）。README 补「插件怎么更新」章节。 |
 | **v2.5.0** | 新增第 14 个工具 `session_index_stage`：**会话整理文档 → 思源桥「待入库」队列**。两步确认（预览返回令牌，原样回传 `confirmWith` 才投递）、按标题+字数去重、支持主题/指定会话/三种模板/落点配置，**绝不自动写入思源笔记库**。读取状态与队列可传 `status: true`。 |
 | **v2.4.1** | 新增 `install.mjs --doctor` **环境体检**（7 项，只读），覆盖插件页安装失败的四个真实成因：git URL 重写镜像、pnpm `fetch-timeout` 超上限、远端大 tarball、lockfile 残留 `git+ssh`。README 增加「插件页装不上」排障章节。 |
