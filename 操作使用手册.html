@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dsh-session-index 操作使用手册 v2.5.2</title>
+<title>dsh-session-index 操作使用手册 v2.5.3</title>
 <style>
   :root{
     --bg:#f7f9fc; --panel:#ffffff; --panel-2:#f1f5fb; --line:#e2e8f2;
@@ -74,7 +74,7 @@
 <body>
 <div class="layout">
 <aside>
-  <div class="brand">dsh-session-index<small>操作使用手册 · v2.5.2</small></div>
+  <div class="brand">dsh-session-index<small>操作使用手册 · v2.5.3</small></div>
   <input id="q" type="search" placeholder="筛选章节 / 关键词…" autocomplete="off">
   <nav id="nav">
     <div class="grp">开始</div>
@@ -102,7 +102,7 @@
   <h1>dsh-session-index 操作使用手册</h1>
   <p>完全化的 MCP 插件：一条命令安装，之后自动配置、自动建索引、<b>新会话由文件事件自动识别（无需重启 DSH）</b>、索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。</p>
   <div class="badges">
-    <span class="badge">版本 <b>v2.5.2</b></span>
+    <span class="badge">版本 <b>v2.5.3</b></span>
     <span class="badge">安装命令 <b>1 条</b></span>
     <span class="badge">会话 <b>32</b>（自动增长）</span>
     <span class="badge">工具 <b>14</b> / 提示词 <b>4</b> / 资源 <b>7+1</b></span>
@@ -114,7 +114,7 @@
 
 <section id="s1" data-kw="概览 架构 是什么 数据流">
   <h2>1. 这是什么</h2>
-  <p>它是一个 <b>MCP (stdio) 插件</b>。DSH 通过内置 <code>dsh-mcp-client</code> 连接它，Agent 就能用 14 个工具查历史。插件自带 <code>install.mjs</code>，自动把连接写进 DSH 配置，<b>不需要手工填表或改 YAML</b>；<code>plugin.json</code> 是机器可读能力清单，<code>dist/*.zip</code> 是可分发包。</p>
+  <p>它是一个 <b>MCP (stdio) 插件</b>。DSH 通过内置 <code>dsh-mcp-client</code> 连接它，Agent 就能用 14 个工具查历史。bundle 由包内 <code>cordis.patch.yml</code> 自动挂载，装完即用，<b>不需要手工填表或改 YAML</b>，也不带任何安装脚本；<code>plugin.json</code> 是机器可读能力清单，<code>dist/*.zip</code> 是可分发包。</p>
 <pre><button class="copy">复制</button><code>DSH  ~/.dsh/sessions/**/session.v4.jsonl.zstd   (分帧 zstd)
 WorkBuddy  ~/.workbuddy/projects/&lt;工作区&gt;/&lt;会话id&gt;.jsonl
         │  fs.watch 事件 → 防抖 → 后台子进程增量构建
@@ -127,9 +127,9 @@ WorkBuddy  ~/.workbuddy/projects/&lt;工作区&gt;/&lt;会话id&gt;.jsonl
   <div class="tip"><b>关键收益：</b>原始会话约 55 MB 且分帧压缩，直接读要反复解压。建一次索引约 10 秒，之后新会话由事件驱动约数十毫秒纳入；查询只读派生索引并返回片段，不重复读源文件。</div>
 </section>
 
-<section id="s2" data-kw="安装 快速开始 上手 github clone 拉取 仓库 install setup 双击 cmd sh 命令 插件页 bundle 仓库地址 pnpm 一键">
+<section id="s2" data-kw="安装 快速开始 上手 插件页 bundle 仓库地址 pnpm npm add update remove 标准流程">
   <h2>2. 安装（只需一次）</h2>
-  <p>仓库 <code>Lau-Jin/DSH</code> 已转为<b>公开仓库</b>，<b>根目录就是插件根</b>，且已声明 <code>dsh.bundle.patch</code>，所以有三种装法。日常推荐第一种：不碰命令行。</p>
+  <p>插件已发布到 npm（包名 <code>dsh-session-index-lau</code>），仓库 <code>Lau-Jin/DSH</code> 已转为<b>公开仓库</b>且声明 <code>dsh.bundle.patch</code>。有两条标准装法，日常推荐第一种：不碰命令行。</p>
 
   <h3>方式 A：DSH 插件页（推荐 · 零命令行）</h3>
   <pre><button class="copy">复制</button><code>仓库地址：https://github.com/Lau-Jin/DSH</code></pre>
@@ -142,41 +142,34 @@ WorkBuddy  ~/.workbuddy/projects/&lt;工作区&gt;/&lt;会话id&gt;.jsonl
   </table>
   <div class="note"><b>为什么它自己认得路径？</b><code>cordis.patch.yml</code> 里的 <code>command</code>、<code>args</code>、<code>DSH_HOME</code> 三处都是 <code>!!js</code> 表达式，在 DSH <b>加载配置时求值</b>（不是安装时），按「显式环境变量 → 宿主记下的路径文件 → profile 标准安装位置」依次探测。宿主行排在 MCP 行之前，路径文件先落盘，MCP 首次 spawn 就能命中——<b>一次重启即生效</b>。</div>
 
-  <h3>方式 B：clone + 一键脚本（想自己控制目录 / 离线分发）</h3>
-<pre><button class="copy">复制</button><code>git clone https://github.com/Lau-Jin/DSH.git
-cd DSH
-install.cmd          # Windows 可直接双击；macOS / Linux / Git Bash 用 ./install.sh</code></pre>
-  <p>脚本只是包装，实际执行 <code>node install.mjs</code>。它会先判断 profile 是否已以 bundle 方式注册了本插件：</p>
-  <ul>
-    <li><b>已注册</b>（你从插件页装过）→ 不写 profile 配置，只清掉残留旧配置块，避免出现两条同 id 的 MCP 行；</li>
-    <li><b>未注册</b>（纯 clone 用户）→ 备份并幂等写入 <code>~/.dsh/profiles/desktop/cordis.patch.yml</code> 的标记块。</li>
-  </ul>
-  <p>两种情况都会：写 <code>server-path.txt</code> → 装 Skill → 开启自动维护 → <b>生成插件包与技能包</b> → 打印 6 项校验。</p>
-  <div class="note">若 DSH 正在运行且工具列表未刷新，<b>完全退出 DSH 桌面端再打开</b>（最小化无效）。之后日常使用<b>不需要任何命令行</b>，新会话也无需重启。</div>
+  <h3>方式 B：pnpm / npm 安装（标准流程 · 命令行用户）</h3>
+<pre><button class="copy">复制</button><code>cd ~/.dsh/profiles/desktop
+pnpm add dsh-session-index-lau          # 安装
+pnpm update dsh-session-index-lau       # 升级到最新版
+pnpm remove dsh-session-index-lau       # 卸载</code></pre>
+  <p>bundle 由包内 <code>cordis.patch.yml</code> 自动挂载：宿主半身按运行时探测把 <code>server.mjs</code> 路径写进 <code>server-path.txt</code>，MCP 客户端随 bundle 一起加载；Skill、自动维护与分发包由插件运行时自行生成，<b>没有任何安装脚本</b>。</p>
+  <div class="note"><b>标准流程铁律</b>：所有插件更新统一走「仓库代码更新 → npm 包发布 → 插件安装更新」三段式；不再有本地 <code>link:</code> 安装或一键脚本，禁止手工改 <code>profile/node_modules</code> 副本（pnpm 重装会按 registry 还原）。若工具列表未刷新，<b>完全退出 DSH 桌面端再打开</b>（最小化无效）。之后日常使用<b>不需要任何命令行</b>。</div>
 
   <h3>前置条件</h3>
   <table>
     <tr><th>条件</th><th>说明</th></tr>
     <tr><td>Node.js ≥ 22.15</td><td>需要 <code>zlib.zstdDecompressSync</code>。方式 A 会自动挑 DSH 自带的 Node（<code>~/.dsh/dsh-runtimes/*/dependencies/node</code>），通常不用操心</td></tr>
-    <tr><td>Git</td><td>仅方式 B 需要。仓库已公开，<b>不再需要 SSH key</b></td></tr>
+    <tr><td>pnpm</td><td>仅方式 B 需要（DSH 自带）。从 npm registry 拉取，<b>无需 git / SSH key</b></td></tr>
   </table>
 
   <h3>常用命令</h3>
   <table>
     <tr><th>命令</th><th>用途</th></tr>
-    <tr><td><code>install.cmd</code> / <code>node install.mjs</code></td><td>安装（幂等，更新后重跑也安全）</td></tr>
-    <tr><td><code>update.cmd</code> / <code>./update.sh</code></td><td><code>git pull</code> 后重装，<b>保留手工改过的 env</b></td></tr>
-    <tr><td><code>node install.mjs --dry-run</code></td><td>预览改动，不写文件（会显示当前是 bundle 还是 patch 方式）</td></tr>
-    <tr><td><code>node install.mjs --verify</code></td><td>校验配置、Node、Skill、索引（6 项）</td></tr>
-    <tr><td><code>node install.mjs --doctor</code></td><td>环境体检（7 项，只读）：插件页装不上时先跑这个</td></tr>
-    <tr><td><code>node install.mjs --uninstall</code></td><td>一键回滚，保留备份</td></tr>
-    <tr><td><code>node install.mjs --reset-env</code></td><td>用默认值覆盖 env 自定义</td></tr>
-    <tr><td><code>node pack.mjs</code></td><td>重新生成插件包 + 技能包</td></tr>
-    <tr><td><code>node smoke.mjs</code></td><td>80 项端到端自测</td></tr>
+    <tr><td><code>pnpm add dsh-session-index-lau</code></td><td>安装（在 profile 目录执行）</td></tr>
+    <tr><td><code>pnpm update dsh-session-index-lau</code></td><td>升级到最新版（先登记 <code>包名@精确版本</code> 供应链豁免）</td></tr>
+    <tr><td><code>pnpm remove dsh-session-index-lau</code></td><td>卸载</td></tr>
+    <tr><td><code>node pack.mjs</code></td><td>重新生成插件包 + 技能包（源仓库开发时）</td></tr>
+    <tr><td><code>node build-index.mjs --force</code></td><td>全量重建索引（源仓库开发时）</td></tr>
+    <tr><td><code>node smoke.mjs</code></td><td>端到端自测（含标准形态断言）</td></tr>
   </table>
 
   <h3>换机器 / 换目录</h3>
-  <p>索引产物固定在 <code>~/.dsh/session-index</code>，与代码目录分离。因此把仓库 clone 到任意位置再跑一次安装即可，历史索引不会丢。插件页安装更省事：路径由运行时探测，换目录后重启就自动跟上。</p>
+  <p>索引产物固定在 <code>~/.dsh/session-index</code>，与代码目录分离。因此换机器只需在新机器按标准流程 <code>pnpm add dsh-session-index-lau</code>，装完重启即自动跟上；索引产物可用 <code>dist/</code> 里的分发包迁移。</p>
 
   <details><summary>手动备选：直接写配置（一般不用，仅排障）</summary>
 <pre><button class="copy">复制</button><code>- id: mcp-session-index
@@ -226,10 +219,10 @@ install.cmd          # Windows 可直接双击；macOS / Linux / Git Bash 用 ./
     <tr><td><code>initialize.instructions</code></td><td>握手即返回使用约定，客户端无需外部文档</td></tr>
     <tr><td><code>SKILL.md</code></td><td>自动安装到 <code>~/.dsh/skills/session-index/</code>，客户端不支持 prompts/resources 时兜底</td></tr>
     <tr><td><code>listChanged</code></td><td>能力声明 + 索引更新通知，客户端自动刷新</td></tr>
-    <tr><td><code>dist/*.zip</code></td><td>可分发包，接收方解压后 <code>node install.mjs</code> 即用</td></tr>
+    <tr><td><code>dist/*.zip</code></td><td>可分发包，接收方按标准流程 <code>pnpm add</code> 安装</td></tr>
   </table>
   <h3>自动打包（无需手工压缩）</h3>
-  <p><code>lib/pack.mjs</code> 是纯 Node 零依赖 ZIP writer（DEFLATE + CRC32 + 中央目录），不引入 archiver/jszip。安装时自动生成，也可随时重打：</p>
+  <p><code>lib/pack.mjs</code> 是纯 Node 零依赖 ZIP writer（DEFLATE + CRC32 + 中央目录），不引入 archiver/jszip。插件运行时自动生成，也可随时重打：</p>
 <pre><button class="copy">复制</button><code>node pack.mjs                # 生成两种包
 node pack.mjs skill          # 只打技能包
 node pack.mjs status         # 查看已生成包
@@ -237,10 +230,10 @@ node pack.mjs verify         # 校验 zip 结构
 session_index_package { "mode": "all" }   # MCP 工具，Agent 也能触发</code></pre>
   <table>
     <tr><th>包</th><th>内容</th><th>用途</th></tr>
-    <tr><td><code>dsh-session-index-v2.5.2.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + 一键脚本 + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
-    <tr><td><code>session-index-skill-v2.5.2.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
+    <tr><td><code>dsh-session-index-v2.5.3.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
+    <tr><td><code>session-index-skill-v2.5.3.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
   </table>
-  <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方解压后运行 <code>node install.mjs</code> 即完成安装。</div>
+  <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方按标准流程 <code>pnpm add dsh-session-index-lau</code> 安装即可。</div>
 </section>
 
 <section id="s5" data-kw="长期记忆 remember recall forget 写入 决策 偏好 归档">
@@ -377,7 +370,7 @@ session_index_refresh                       // 仅改规则或需即时生效时
 
 <section id="s12" data-kw="配置 环境变量 命令 速查 CLI">
   <h2>12. 配置与命令速查</h2>
-  <div class="tip"><b>日常只需要：安装时 <code>node install.mjs</code>，之后完全不碰命令行。</b>下表仅供高级调整与排错。</div>
+  <div class="tip"><b>日常只需要：按标准流程 <code>pnpm add</code> 装一次，之后完全不碰命令行。</b>下表仅供高级调整与排错。</div>
   <h3>环境变量</h3>
   <table>
     <tr><th>变量</th><th>默认</th><th>说明</th></tr>
@@ -396,11 +389,11 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <tr><td><code>SESSION_INDEX_STAGE_TIMEOUT_MS</code></td><td><code>5000</code></td><td>单次请求超时（1000–60000）</td></tr>
     <tr><td><code>SESSION_INDEX_STAGE_HPATH / _NOTEBOOK</code></td><td><code>/会话札记/思源</code> / <code>思源桥</code></td><td>默认落点</td></tr>
   </table>
-  <div class="note">install.mjs 每次运行会把标记块内 <code>env</code> 重写为默认值。手改这些值后<b>不要重跑 install.mjs</b>，否则会被覆盖。</div>
+  <div class="note">环境变量优先级最高且升级不会覆盖，<b>推荐用环境变量</b>做长期自定义；改包内 <code>cordis.patch.yml</code> 的 <code>env</code> 会在升级时被还原。</div>
   <h3>命令</h3>
   <table>
     <tr><th>命令</th><th>用途</th></tr>
-    <tr><td><code>node install.mjs</code>（含 --verify / --uninstall / --dry-run）</td><td>安装、校验、回滚、预览</td></tr>
+    <tr><td><code>pnpm add / update / remove dsh-session-index-lau</code></td><td>安装、升级、卸载（在 profile 目录执行）</td></tr>
     <tr><td><code>node pack.mjs</code>（含 status / verify / plugin / skill）</td><td>自动打包与校验</td></tr>
     <tr><td><code>node build-index.mjs --force</code></td><td>全量重建（改抽取规则后）</td></tr>
     <tr><td><code>node smoke.mjs</code> / <code>npm run check</code></td><td>80 项自测 / 语法检查</td></tr>
@@ -440,7 +433,7 @@ session_index_refresh                       // 仅改规则或需即时生效时
   <h2>13. 故障排查、安全与回滚</h2>
   <table>
     <tr><th>现象</th><th>处理</th></tr>
-    <tr><td>工具列表没出现 / 不是 14 个</td><td>完全退出 DSH 再打开；或 <code>node install.mjs --verify</code></td></tr>
+    <tr><td>工具列表没出现 / 不是 14 个</td><td>完全退出 DSH 再打开；确认 <code>pnpm list dsh-session-index-lau</code> 已装且 bundle 已挂载</td></tr>
     <tr><td>新会话查不到</td><td>等 3~5 秒（事件防抖）；<code>status</code> 看 <code>autoIndex.watch.events</code> 与 <code>lastResult.reason</code>；仍不行手动 <code>refresh</code></td></tr>
     <tr><td>监听未建立（watch.watching=0）</td><td>平台不支持递归监听，60 秒轮询自动兜底；也可用 <code>SESSION_INDEX_WATCH=0</code> 明确关闭</td></tr>
     <tr><td>「索引正在后台自动构建」</td><td>首次启动正常现象，等待几秒</td></tr>
@@ -449,13 +442,13 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <tr><td>prompts/resources 看不到</td><td>客户端可能只实现 tools；Skill 自动兜底，工具不受影响</td></tr>
     <tr><td>语义结果太宽泛</td><td>用 <code>mode: "keyword"</code> 或调小 <code>limit</code>，看 <code>matchType</code></td></tr>
     <tr><td>hybrid 返回 degraded</td><td>正常：未配置 embedding 自动降级</td></tr>
-    <tr><td>插件页提示「没有写入权限，无法安装」</td><td>这不是权限问题，是 pnpm 那一步失败后的归类标签；先跑 <code>node install.mjs --doctor</code> 定位真因</td></tr>
+    <tr><td>插件页提示「没有写入权限，无法安装」</td><td>这不是权限问题，是 pnpm 那一步失败后的归类标签；在 profile 目录手动跑 <code>pnpm add dsh-session-index-lau</code> 看真实报错</td></tr>
     <tr><td>安装卡住 / <code>UND_ERR_DESTROYED</code>、<code>UND_ERR_INVALID_ARG</code></td><td>见下方「插件页装不上」三节</td></tr>
   </table>
 
-  <h3>插件页装不上？先体检</h3>
-  <p>DSH 插件页装任何东西，底层都是一次 <code>pnpm install</code>。装不上时先跑只读体检，七项检查各自给出结论和修法：</p>
-<pre><button class="copy">复制</button><code>node install.mjs --doctor</code></pre>
+  <h3>插件页装不上？pnpm 排障</h3>
+  <p>DSH 插件页装任何东西，底层都是一次 <code>pnpm install</code>。装不上时先在 profile 目录手动执行安装看真实报错，并逐项对照下表：</p>
+<pre><button class="copy">复制</button><code>cd ~/.dsh/profiles/desktop &amp;&amp; pnpm add dsh-session-index-lau</code></pre>
   <table>
     <tr><th>检查项</th><th>会导致的现象</th></tr>
     <tr><td>Node 支持 zstd</td><td>索引建不起来</td></tr>
@@ -488,20 +481,17 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
   <h3>安全与回滚</h3>
   <ul>
     <li>索引含会话全文，只落在本机 <code>~/.dsh/session-index/</code>，<b>不要打包分享</b>；分发包已自动排除这些数据。</li>
-    <li>源会话（DSH / WorkBuddy）<b>全程只读</b>。<code>install.mjs</code> 写配置前自动备份，只改带标记整段，幂等可回滚。</li>
+    <li>源会话（DSH / WorkBuddy）<b>全程只读</b>。bundle 由 DSH 挂载前自动备份配置，卸载即随 bundle 一起移除，可回滚。</li>
     <li><code>forget</code> 默认归档不删除；<code>notes.json</code> 写前留备份。</li>
   </ul>
-<pre><button class="copy">复制</button><code>node install.mjs --uninstall      // 移除配置段与自动装的 Skill（先备份）
+<pre><button class="copy">复制</button><code>pnpm remove dsh-session-index-lau      // 卸载（或在插件页禁用 / 卸载）
 完全退出 DSH 再打开
 可选：删除 ~/.dsh/session-index/ 与 dist/（不影响任何原始会话）</code></pre>
 </section>
 
 <section id="s14" data-kw="目录结构 验证记录 版本 文件清单">
   <h2>14. 目录结构与验证记录</h2>
-<pre><button class="copy">复制</button><code>DSH/                        ← 仓库根 = 插件根（git clone 下来直接装）
-├── install.cmd / install.sh    一键安装（Windows 双击 / 跨平台执行）
-├── update.cmd / update.sh      更新：git pull + 重装（保留 env 自定义）
-├── install.mjs             安装 / 校验 / 回滚 / 自动打包（自动识别 bundle / patch 方式）
+<pre><button class="copy">复制</button><code>DSH/                        ← 仓库根 = 插件根（标准流程：sync-publish → npm publish → pnpm update）
 ├── pack.mjs                打包 CLI
 ├── server.mjs              MCP 服务：14 工具 + 4 prompts + resources + 通知
 ├── cordis.patch.yml        bundle 层：挂宿主行 + MCP 行（!!js 自解析命令与路径）
@@ -509,7 +499,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
 ├── smoke.mjs               80 项端到端自测
 ├── icon.svg                插件页图标（卡片 + 放大镜，64×64 SVG，938 字节）
 ├── plugin.json             机器可读插件能力清单（含安装方式与仓库信息）
-├── package.json            v2.5.2 / icon / dsh.bundle.patch / dsh.plugin / 脚本
+├── package.json            v2.5.3 / icon / dsh.bundle.patch / dsh.plugin / 脚本
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能
@@ -562,10 +552,11 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     <li><b>v2.5.0</b> 新增第 14 个工具 <code>session_index_stage</code>：<b>会话整理文档 → 思源桥待入库</b>。两步确认（预览给令牌，回传 <code>confirmWith</code> 才投递）、标题+字数去重、三种模板与落点可配；只入队，<b>绝不自动写库</b>。第 12 章补完整用法。</li>
     <li><b>v2.5.1</b> <code>tools/push-doc.mjs</code> 新增 <code>--from-workbuddy</code> <b>批量模式</b>：扫描 WorkBuddy 全部会话生成的文档，内容哈希去重 + 排除临时目录 + 同名查重后一次投递；默认只读预览。实测 22 篇全部入队、重复执行全被拦截。README 补「插件怎么更新」：本机为 npm registry 来源（<code>dsh-session-index-lau</code>），插件页<b>有「更新」按钮、无需卸载重装</b>。<b>同版修订</b>：批量判重改为持久化状态文件（<code>push-doc-state.json</code>），丢弃后不重新推送、内容更新才投新版；新增 <code>--seed</code>。</li>
     <li><b>v2.5.2</b> <b>发布流程标准化</b>：新增发布前 / 安装后核验门禁 <code>dist/publish/check-release.mjs</code>（语法、80 项冒烟、功能核验、四处版本统一、MCP 握手），核验未全绿禁止推进；标准流程文档同步批量推送 / 持久化判重 / 定时自动化机制与版本统一矩阵；把源仓库的判重脚本同步进发布包与 DSH 安装，消除「同号不同内容」分叉。</li>
+    <li><b>v2.5.3</b> <b>回归纯 npm 包形态</b>：移除整套「本地 link 安装 + 一键脚本」机制，删除 <code>install.mjs</code> / <code>install.cmd</code> / <code>install.sh</code> / <code>update.cmd</code> / <code>update.sh</code>；<code>package.json</code> 去掉 <code>setup</code>/<code>verify</code>/<code>uninstall</code> 脚本与安装器白名单，<code>plugin.json</code> 删除 <code>automatic</code> 旧安装键与「手工安装」方式；安装 / 升级 / 卸载统一走 <code>pnpm add</code> / <code>pnpm remove</code>。README 与本手册同步改为标准流程说明，smoke 增加标准形态断言防回潮。</li>
   </ul>
 </section>
 
-<footer>dsh-session-index v2.5.2 · 操作使用手册 · 生成于 2026-11-14 · 零第三方依赖</footer>
+<footer>dsh-session-index v2.5.3 · 操作使用手册 · 生成于 2026-11-14 · 零第三方依赖</footer>
 </main>
 </div>
 <script>

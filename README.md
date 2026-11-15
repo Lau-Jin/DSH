@@ -1,11 +1,11 @@
 # dsh-session-index
 
 > DSH（DeepSeek Harness）+ WorkBuddy 的**全会话索引与跨会话记忆** MCP 插件。
-> 拉取仓库 → 双击安装 → 之后全自动。零第三方依赖，源会话文件全程只读。
+> DSH 插件页 / pnpm 安装 → 之后全自动。零第三方依赖，源会话文件全程只读。
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.5.2** |
+| 版本 | **v2.5.3** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
 | MCP 能力 | **14 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
@@ -50,24 +50,20 @@ DSH 的会话存在 `~/.dsh/sessions/` 下，是**上千个独立 zstd 帧拼接
 
 宿主行排在前、MCP 行排在后，路径文件先落盘，MCP 侧首次 spawn 就能命中——**一次重启即生效**。
 
-### 方式 B：clone + 一键脚本（想自己控制目录 / 离线分发）
+### 方式 B：pnpm / npm 安装（标准流程 · 推荐命令行用户）
+
+插件已发布到 npm，包名 `dsh-session-index-lau`。在 DSH profile 目录执行：
 
 ```bash
-git clone https://github.com/Lau-Jin/DSH.git
-cd DSH
+cd ~/.dsh/profiles/desktop
+pnpm add dsh-session-index-lau          # 安装
+pnpm update dsh-session-index-lau       # 升级到最新版
+pnpm remove dsh-session-index-lau       # 卸载
 ```
 
-然后：
+bundle 由包内 `cordis.patch.yml` 自动挂载，宿主半身按运行时探测解析 `server.mjs` 路径，MCP 客户端随 bundle 一起加载；安装 / 升级 / 卸载后**完全退出 DSH 再打开**即生效。
 
-- **Windows**：双击 `install.cmd`
-- **macOS / Linux / Git Bash**：`./install.sh`
-
-`install.mjs` 会先判断 profile 是否已经以 bundle 方式注册了本插件：
-
-- **已注册**（你从插件页装过）→ 不再写 profile 配置，只把残留的旧配置块清掉，避免出现两条同 id 的 MCP 行；
-- **未注册**（纯 clone 用户）→ 往 `~/.dsh/profiles/desktop/cordis.patch.yml` 写一个带标记的配置块。
-
-两种情况都会：写好 `server-path.txt`、装 Skill、生成可分发包。
+> **标准流程铁律**：所有插件更新统一走「仓库代码更新 → npm 包发布 → 插件安装更新」三段式。不再有本地 `link:` 安装、一键脚本或旧宿主兼容转发；禁止手工改 `profile/node_modules` 副本（pnpm 重装会按 registry 还原）。
 
 ### 方式 C：手动加 MCP（不推荐，仅排障用）
 
@@ -82,33 +78,20 @@ DSH「MCP 与技能」→ MCP 里添加 stdio server：
 ### 前置条件
 
 1. **Node ≥ 22.15** —— 需要 `zlib.zstdDecompressSync`。插件页安装时会自动挑 DSH 自带的 Node（`~/.dsh/dsh-runtimes/*/dependencies/node`），通常不用你操心。
-2. 方式 B 需要 **Git**；仓库已转公开，无需 SSH key。
+2. 方式 B 需要 **pnpm**（DSH 自带）；从 npm registry 拉取，无需 git、无需 SSH key。
 
-### 安装脚本做了什么
+### 安装后发生了什么
 
-`install.cmd` / `install.sh` 只是包装，实际调用 `node install.mjs`：
+`cordis.patch.yml` 随 bundle 自动应用，挂两行：`session-index-host`（宿主半身，用 `import.meta.url` 解析真实安装目录，把 `server.mjs` 绝对路径写进 `~/.dsh/session-index/server-path.txt`）与 `mcp-session-index`（MCP stdio 客户端，14 工具 / 4 提示词 / 8 资源）。
 
-1. 解析可用的 Node（含 zstd 支持校验）
-2. 判断安装方式（bundle / patch），必要时**备份**并写入 `cordis.patch.yml` 的标记块
-3. 写 `~/.dsh/session-index/server-path.txt`，记下 MCP 入口绝对路径
-4. 安装 Skill 到 `~/.dsh/skills/session-index/SKILL.md`
-5. 自动生成插件包与技能包到 `dist/`
-6. 打印 6 项校验结果
-
-幂等：重复运行不会产生重复条目；**更新后重跑会保留你手工改过的 env 值**（除非显式加 `--reset-env`）。
+三处 `!!js` 表达式在 **DSH 加载配置时求值**（不是安装时），按「显式环境变量 → 宿主记下的路径文件 → profile 标准安装位置」依次探测，因此装到哪个目录都无需改配置，**一次重启即生效**。Skill 与分发包由插件自身在运行时生成。
 
 ---
 
-## 插件页装不上？先跑环境体检
+## 插件页装不上？pnpm 排障要点
 
-DSH 插件页装任何东西，底层都是一次 `pnpm install`。装不上时提示常常被归类成
-「没有写入权限，无法安装」，但**真实原因通常在 pnpm 那一步**。装上本插件后可以直接体检：
-
-```bash
-node install.mjs --doctor
-```
-
-七项检查，每项给出结论与修法（只读，不改任何文件）：
+DSH 插件页装任何东西，底层都是一次 `pnpm install`。装不上时提示常被归类成
+「没有写入权限，无法安装」，但**真实原因通常在 pnpm 那一步**。逐项对照排查：
 
 | 检查 | 会导致的现象 |
 |---|---|
@@ -308,7 +291,7 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 npm registry 来源**：profile 依赖 `dsh-session-index-lau: ^2.5.2`，
+**本机当前是 npm registry 来源**：profile 依赖 `dsh-session-index-lau: ^2.5.3`，
 属于上表第一行，所以插件页**有「版本」区块与「更新」按钮**——以后发新版后
 **点更新即可，不需要卸载重装**。命令行 `pnpm update <包名>` 与点按钮是同一条路径。
 
@@ -334,35 +317,32 @@ cd ~/.dsh/profiles/desktop && npx -y pnpm@11.28.5 update dsh-session-index-lau@<
 ## 更新 / 校验 / 回滚
 
 ```bash
-# Windows
-update.cmd              # git pull + 重装（保留 env 自定义）
-
-# macOS / Linux
-./update.sh
+cd ~/.dsh/profiles/desktop
+pnpm update dsh-session-index-lau       # 升级（先在 pnpm-workspace.yaml 登记 包名@精确版本 豁免供应链冷却期）
+pnpm remove dsh-session-index-lau       # 卸载
 ```
 
+源仓库开发时的自检命令：
+
 ```bash
-node install.mjs --doctor        # 环境体检（7 项，装不上时先跑这个）
-node install.mjs --verify        # 6 项状态校验
-node install.mjs --dry-run       # 预览改动，不写文件
-node install.mjs --uninstall     # 移除配置块与自动装的 Skill（先备份）
-node install.mjs --reset-env     # 用默认值覆盖 env 自定义
-node smoke.mjs                   # 80 项端到端自测
+node pack.mjs                    # 重新生成插件包 + 技能包
+node build-index.mjs --force     # 全量重建索引
+node smoke.mjs                   # 端到端自测（含标准形态断言）
 ```
 
 ---
 
 ## 分发包（离线 / 无 git 环境）
 
-`install.mjs` 每次运行会自动生成：
+`node pack.mjs` 可随时重新生成（打包由 `lib/pack.mjs` 完成，纯 Node 零依赖）：
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.5.2.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，解压后双击 `install.cmd` |
-| `dist/session-index-skill-v2.5.2.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.5.3.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
+| `dist/session-index-skill-v2.5.3.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
-已验证包内无任何会话数据与密钥，可安全分发。也可随时 `node pack.mjs` 重打，或调 MCP 工具 `session_index_package`。
+已验证包内无任何会话数据与密钥，可安全分发。也可调 MCP 工具 `session_index_package` 触发打包。
 
 ---
 
@@ -371,7 +351,7 @@ node smoke.mjs                   # 80 项端到端自测
 全部通过配置块的 `env` 设置。改哪里取决于安装方式：
 
 - **插件页安装**：改插件包内的 `cordis.patch.yml`（`<profile>/node_modules/dsh-session-index/cordis.patch.yml`），改完重启 DSH；
-- **clone + 脚本**：改 `~/.dsh/profiles/desktop/cordis.patch.yml` 里 `>>> session-index` 标记块内的 `env`，重跑 `node install.mjs` 会保留你写的值。
+- **pnpm 安装**：改已装包内的 `cordis.patch.yml`（`<profile>/node_modules/dsh-session-index-lau/cordis.patch.yml`）里的 `env`；升级会还原默认值，如需长期自定义建议用环境变量。
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
@@ -385,7 +365,7 @@ node smoke.mjs                   # 80 项端到端自测
 | `SESSION_INDEX_DIR` | `~/.dsh/session-index` | 索引产物目录 |
 | `SESSION_INDEX_EMBED_URL` / `_MODEL` / `_KEY` | 空 | 可选，OpenAI 兼容 embedding；不配则纯本地 |
 
-> 改完这些值后**不要加 `--reset-env`**；正常重跑安装会保留它们。
+> 环境变量方式优先级最高，且升级不会覆盖，推荐用它替代改包内文件。
 
 ---
 
@@ -396,11 +376,8 @@ dsh-session-index/                  # 仓库根 = 插件根
 ├── server.mjs                      # MCP stdio server（14 工具 / prompts / resources）
 ├── cordis.patch.yml                # bundle patch：挂宿主行 + MCP 行（含 !!js 自解析路径）
 ├── build-index.mjs                 # 索引构建（多帧 zstd → 可检索记录 + 会话卡）
-├── install.mjs                     # 安装 / 校验 / 卸载 / 自动打包
 ├── pack.mjs                        # 打包 CLI（零依赖 ZIP writer）
 ├── smoke.mjs                       # 80 项端到端自测
-├── install.cmd / install.sh        # 一键安装（双击 / 执行）
-├── update.cmd / update.sh          # 更新（git pull + 重装）
 ├── icon.svg                        # 插件页图标（package.json 的 icon 字段指向它）
 ├── plugin.json                     # 机器可读能力清单（也通过 MCP 资源暴露）
 ├── package.json                    # 元信息 + dsh.bundle.patch + dsh.plugin 声明
@@ -440,7 +417,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 ## 卸载
 
 - **插件页安装的**：插件页里禁用或卸载 `dsh-session-index`，重启 DSH 即可（MCP 行随 bundle 一起消失）。
-- **clone + 脚本安装的**：`node install.mjs --uninstall`，移除配置块与自动安装的 Skill（先备份）。
+- **pnpm 安装的**：`pnpm remove dsh-session-index-lau`，或在插件页禁用 / 卸载；MCP 行随 bundle 一起消失。
 
 两种情况下索引目录 `~/.dsh/session-index/` 都保留（不影响原始会话），需要时手动删除。
 
@@ -450,6 +427,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 
 | 版本 | 变更 |
 |---|---|
+| **v2.5.3** | 移除整套「本地 link 安装 + 一键脚本」机制：删除 `install.mjs` / `install.cmd` / `install.sh` / `update.cmd` / `update.sh`，回归纯 npm 包形态（bundle 由 `cordis.patch.yml` 自动挂载）。`package.json` 去掉 `setup`/`verify`/`uninstall` 脚本与安装器白名单，`plugin.json` 删除 `automatic` 旧安装键与「手工安装」方式；安装 / 升级 / 卸载统一走 `pnpm add` / `pnpm remove`。README 与操作手册同步改为标准流程说明，smoke 增加标准形态断言防回潮。 |
 | **v2.5.2** | 发布流程标准化：新增发布前/后核验门禁（`dist/publish/check-release.mjs`），把「检查并核验 → 确认版本可用 → 才推进标准流程」固化为强制步骤；标准流程文档同步新机制（批量推送、持久化判重、定时自动化）与版本统一矩阵。把源仓库已生效的持久化判重脚本同步进发布包与 DSH 安装，消除「同版本号、内容不同」的分叉。 |
 | **v2.5.1** | `tools/push-doc.mjs` 增加 **`--from-workbuddy` 批量模式**：扫描 WorkBuddy 全部会话产出的文档，按内容哈希去重、排除临时/依赖目录、逐篇查重后一次性投递到思源桥待入库；默认只读预览，`--send` 才入队，`--no-exclude` / `--include-txt` / `--source` / `--limit` / `--since` / `--force` 可控。修掉按 `chars` 判重不稳的问题（思源桥会规整正文）。README 补「插件怎么更新」章节。 |
 | **v2.5.0** | 新增第 14 个工具 `session_index_stage`：**会话整理文档 → 思源桥「待入库」队列**。两步确认（预览返回令牌，原样回传 `confirmWith` 才投递）、按标题+字数去重、支持主题/指定会话/三种模板/落点配置，**绝不自动写入思源笔记库**。读取状态与队列可传 `status: true`。 |

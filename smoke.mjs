@@ -9,6 +9,7 @@
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import path from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { inspectZip } from './lib/pack.mjs';
@@ -128,9 +129,9 @@ try {
   const init = await request('initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
-    clientInfo: { name: 'smoke-test', version: '2.5.2' },
+    clientInfo: { name: 'smoke-test', version: '2.5.3' },
   });
-  check('initialize 握手与能力声明', init.result?.serverInfo?.version === '2.5.2' && Boolean(init.result?.capabilities?.prompts) && Boolean(init.result?.capabilities?.resources), init.result?.serverInfo?.version);
+  check('initialize 握手与能力声明', init.result?.serverInfo?.version === '2.5.3' && Boolean(init.result?.capabilities?.prompts) && Boolean(init.result?.capabilities?.resources), init.result?.serverInfo?.version);
   check('initialize 返回自描述 instructions', (init.result?.instructions || '').includes('session_index_brief'));
   check('声明 listChanged 通知能力', init.result?.capabilities?.resources?.listChanged === true && init.result?.capabilities?.prompts?.listChanged === true);
   notify('notifications/initialized');
@@ -302,6 +303,23 @@ try {
   child.stdin.end();
   child.kill();
   mockBridge.close();
+}
+
+// ---- 标准形态断言（去除 legacy 安装体系后，确保不回潮）----
+try {
+  const pkgStd = JSON.parse(readFileSync(path.join(here, 'package.json'), 'utf8'));
+  const plugStd = JSON.parse(readFileSync(path.join(here, 'plugin.json'), 'utf8'));
+  const cordisStd = readFileSync(path.join(here, 'cordis.patch.yml'), 'utf8');
+  const svStd = readFileSync(path.join(here, 'server.mjs'), 'utf8');
+  const oneClick = ['install.cmd', 'install.sh', 'update.cmd', 'update.sh', '一键安装.vbs', '一键安装.cmd', '一键安装.command'];
+  check('package.json 不携带 install.mjs 本地安装器', !/install\.mjs/.test(JSON.stringify(pkgStd.scripts || {})) && !String(pkgStd.files).includes('install.mjs'), '');
+  check('files 不含一键安装脚本', !oneClick.some((f) => existsSync(path.join(here, f))), oneClick.filter((f) => existsSync(path.join(here, f))).join(',') || 'all clean');
+  check('plugin.json 无 legacy 安装键', !('install' in (plugStd.automatic || {})) && !('verify' in (plugStd.automatic || {})) && !('uninstall' in (plugStd.automatic || {})) && !('doubleClickInstall' in (plugStd.automatic || {})), '');
+  check('cordis.patch.yml 挂载 session-index', cordisStd.includes('session-index'), '');
+  check('无 legacyHostBridge / install.mjs 残留', !cordisStd.includes('legacyHostBridge') && !readFileSync(path.join(here, 'plugin.json'), 'utf8').includes('install.mjs'), '');
+  check('六处版本声明一致 (2.5.3)', pkgStd.version === '2.5.3' && plugStd.version === '2.5.3' && svStd.includes("const VERSION = '2.5.3'"), `${pkgStd.version}/${plugStd.version}/server.mjs`);
+} catch (e) {
+  check('标准形态断言', false, e.message);
 }
 
 const failed = results.filter((r) => !r.ok).length;
