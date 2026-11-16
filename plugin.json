@@ -1,12 +1,12 @@
 {
   "name": "dsh-session-index",
-  "version": "2.5.3",
+  "version": "2.6.0",
   "icon": "icon.svg",
   "displayName": {
     "zh": "全会话索引与跨会话记忆",
     "en": "Session Index & Cross-Session Memory"
   },
-  "description": "完全化的 DSH 插件：在 DSH 插件页粘贴仓库地址即可安装（bundle 自动挂载，无需改配置、无需命令行），装完自动建索引、文件事件驱动识别新会话（无需重启），索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。",
+  "description": "完全化的 DSH 插件：在 DSH 插件页粘贴仓库地址即可安装（bundle 自动挂载，无需改配置、无需命令行），装完自动建索引、侧栏提供「会话检索」面板（搜索并翻看每次会话的结论与涉及路径）、文件事件驱动识别新会话（无需重启），索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。",
   "keywords": ["dsh", "dsh-bundle", "mcp", "session", "memory", "cross-session", "semantic-search", "auto-watch", "auto-package", "workbuddy"],
   "repository": {
     "type": "git",
@@ -78,8 +78,8 @@
   },
   "packages": {
     "directory": "dist",
-    "plugin": "dsh-session-index-v2.5.3.zip",
-    "skill": "session-index-skill-v2.5.3.zip",
+    "plugin": "dsh-session-index-v2.6.0.zip",
+    "skill": "session-index-skill-v2.6.0.zip",
     "generator": "lib/pack.mjs (zero dependency ZIP writer)",
     "contents": ["MANIFEST.json", "INSTALL.md"],
     "excludes": ["会话索引分片 *.jsonl.gz", "meta/cards/notes/vectors.json", "备份与临时文件", "已有 zip"]

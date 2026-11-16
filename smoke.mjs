@@ -129,9 +129,9 @@ try {
   const init = await request('initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
-    clientInfo: { name: 'smoke-test', version: '2.5.3' },
+    clientInfo: { name: 'smoke-test', version: JSON.parse(readFileSync(path.join(here, 'package.json'), 'utf8')).version },
   });
-  check('initialize 握手与能力声明', init.result?.serverInfo?.version === '2.5.3' && Boolean(init.result?.capabilities?.prompts) && Boolean(init.result?.capabilities?.resources), init.result?.serverInfo?.version);
+  check('initialize 握手与能力声明', init.result?.serverInfo?.version === JSON.parse(readFileSync(path.join(here, 'package.json'), 'utf8')).version && Boolean(init.result?.capabilities?.prompts) && Boolean(init.result?.capabilities?.resources), init.result?.serverInfo?.version);
   check('initialize 返回自描述 instructions', (init.result?.instructions || '').includes('session_index_brief'));
   check('声明 listChanged 通知能力', init.result?.capabilities?.resources?.listChanged === true && init.result?.capabilities?.prompts?.listChanged === true);
   notify('notifications/initialized');
@@ -317,7 +317,8 @@ try {
   check('plugin.json 无 legacy 安装键', !('install' in (plugStd.automatic || {})) && !('verify' in (plugStd.automatic || {})) && !('uninstall' in (plugStd.automatic || {})) && !('doubleClickInstall' in (plugStd.automatic || {})), '');
   check('cordis.patch.yml 挂载 session-index', cordisStd.includes('session-index'), '');
   check('无 legacyHostBridge / install.mjs 残留', !cordisStd.includes('legacyHostBridge') && !readFileSync(path.join(here, 'plugin.json'), 'utf8').includes('install.mjs'), '');
-  check('六处版本声明一致 (2.5.3)', pkgStd.version === '2.5.3' && plugStd.version === '2.5.3' && svStd.includes("const VERSION = '2.5.3'"), `${pkgStd.version}/${plugStd.version}/server.mjs`);
+  const wantVer = pkgStd.version; // 一致性看 package.json：以后发版只改一处
+  check('版本声明一致 (' + wantVer + ')', plugStd.version === wantVer && svStd.includes("const VERSION = '" + wantVer + "'"), `${pkgStd.version}/${plugStd.version}/server.mjs`);
 } catch (e) {
   check('标准形态断言', false, e.message);
 }

@@ -5,7 +5,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.5.3** |
+| 版本 | **v2.6.0** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
 | MCP 能力 | **14 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
@@ -291,7 +291,7 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 npm registry 来源**：profile 依赖 `dsh-session-index-lau: ^2.5.3`，
+**本机当前是 npm registry 来源**：profile 依赖 `dsh-session-index-lau: ^2.6.0`，
 属于上表第一行，所以插件页**有「版本」区块与「更新」按钮**——以后发新版后
 **点更新即可，不需要卸载重装**。命令行 `pnpm update <包名>` 与点按钮是同一条路径。
 
@@ -338,8 +338,8 @@ node smoke.mjs                   # 端到端自测（含标准形态断言）
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.5.3.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
-| `dist/session-index-skill-v2.5.3.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.6.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
+| `dist/session-index-skill-v2.6.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可调 MCP 工具 `session_index_package` 触发打包。
@@ -427,6 +427,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 
 | 版本 | 变更 |
 |---|---|
+| **v2.6.0** | 新增**「会话检索」面板**（侧栏入口 + main 面板）：搜索框 + 会话卡列表（DSH 蓝 / WorkBuddy 黄左色条）+ 右侧详情（结论 · 提问 · 涉及路径 · 关键词 · 工具）。数据走宿主半身注册的 `session-index` 命令（`ctx.remote.commands.execute`），**浏览器半身不碰文件系统**；宿主半身没加载时给一句人话提示而不是静默失败。新增 `test-panel.mjs`（57 项），版本一致性改为跟 `package.json` 对齐 |
 | **v2.5.3** | 移除整套「本地 link 安装 + 一键脚本」机制：删除 `install.mjs` / `install.cmd` / `install.sh` / `update.cmd` / `update.sh`，回归纯 npm 包形态（bundle 由 `cordis.patch.yml` 自动挂载）。`package.json` 去掉 `setup`/`verify`/`uninstall` 脚本与安装器白名单，`plugin.json` 删除 `automatic` 旧安装键与「手工安装」方式；安装 / 升级 / 卸载统一走 `pnpm add` / `pnpm remove`。README 与操作手册同步改为标准流程说明，smoke 增加标准形态断言防回潮。 |
 | **v2.5.2** | 发布流程标准化：新增发布前/后核验门禁（`dist/publish/check-release.mjs`），把「检查并核验 → 确认版本可用 → 才推进标准流程」固化为强制步骤；标准流程文档同步新机制（批量推送、持久化判重、定时自动化）与版本统一矩阵。把源仓库已生效的持久化判重脚本同步进发布包与 DSH 安装，消除「同版本号、内容不同」的分叉。 |
 | **v2.5.1** | `tools/push-doc.mjs` 增加 **`--from-workbuddy` 批量模式**：扫描 WorkBuddy 全部会话产出的文档，按内容哈希去重、排除临时/依赖目录、逐篇查重后一次性投递到思源桥待入库；默认只读预览，`--send` 才入队，`--no-exclude` / `--include-txt` / `--source` / `--limit` / `--since` / `--force` 可控。修掉按 `chars` 判重不稳的问题（思源桥会规整正文）。README 补「插件怎么更新」章节。 |
