@@ -212,7 +212,8 @@ const mainRegs2 = [];
 const sideRegs2 = [];
 cx.apply(ctx3);
 const run2 = mainRegs2[0].opts.inject().run;
-const payload = await run2(undefined, 'session-index list 3');
+// 命令通道按 agent 寻址：第一个参数必须是真实会话 id 字符串。
+const payload = await run2('sess-unit-test', 'session-index list 3');
 check('run: 成功路径解析出 payload', payload && payload.ok === true && Array.isArray(payload.items), JSON.stringify(calls));
 check('run: 把命令行原样发给宿主', calls[0] === 'session-index list 3', calls[0]);
 
@@ -231,7 +232,7 @@ const run4 = (() => {
   return fn;
 })();
 let msg = '';
-try { await run4(undefined, 'session-index status'); } catch (e) { msg = e.message; }
+try { await run4('sess-unit-test', 'session-index status'); } catch (e) { msg = e.message; }
 check('run: 宿主没加载时给人话提示', /宿主半身没加载/.test(msg), msg.slice(0, 40));
 
 // value 缺失（Host 半身没注册命令）也走同一条提示
@@ -249,8 +250,50 @@ const ctx5run = (() => {
   return fn;
 })();
 let msg2 = '';
-try { await ctx5run(undefined, 'session-index status'); } catch (e) { msg2 = e.message; }
+try { await ctx5run('sess-unit-test', 'session-index status'); } catch (e) { msg2 = e.message; }
 check('run: 命令未解析时也给人话提示', /宿主半身没加载/.test(msg2), msg2.slice(0, 40));
+
+// 没有可寻址会话时不许发请求：undefined / 空串 / 快照对象都要被挡住，
+// 否则网关会回 `gateway/input-invalid ... wire field "agentId"`（v2.6.0 的真实故障）。
+for (const bad of [undefined, '', { byId: {}, ids: [] }]) {
+  let badMsg = '';
+  let sent = false;
+  const guardRun = (() => {
+    let fn = null;
+    const c = {
+      effect: () => undefined, locale: { register: () => () => {}, bind: () => (k) => k },
+      slots: {
+        inject: (slot, cb) => { const out = cb(); if (out && typeof out.next === 'function') out.next(); },
+        register: (opts) => { if (opts.name === 'main') fn = opts.inject().run; return () => {}; },
+      },
+      remote: { commands: { execute: async () => { sent = true; return { ok: true, value: { result: { kind: 'success', text: '{}' } } }; } } },
+    };
+    cx.apply(c);
+    return fn;
+  })();
+  try { await guardRun(bad, 'session-index list 3'); } catch (e) { badMsg = e.message; }
+  check(`run: 会话 id ${JSON.stringify(bad)} 被挡住且没发请求`, badMsg.length > 0 && sent === false, badMsg.slice(0, 30));
+}
+
+// 快照 → 可寻址 id：跳过已归档/已移除，优先屏上会话，其次最新
+const pick = cx.__test && cx.__test.pickSessionId;
+check('client 暴露 pickSessionId', typeof pick === 'function');
+const snap = {
+  ids: ['a-gone', 'b-new', 'c-shown', 'd-old'],
+  byId: {
+    'a-gone': { archived: true, updatedAt: 9 },
+    'b-new': { updatedAt: 300 },
+    'c-shown': { updatedAt: 100, retainedBy: { view: 1 } },
+    'd-old': { updatedAt: 50 },
+  },
+};
+check('pickSessionId: 跳过已归档', pick(snap) !== 'a-gone', pick(snap));
+check('pickSessionId: 优先屏上会话', pick(snap) === 'c-shown', pick(snap));
+check('pickSessionId: 没有屏上会话时取最新', pick({ ids: ['x', 'y'], byId: { x: { updatedAt: 10 }, y: { updatedAt: 20 } } }) === 'y');
+check('pickSessionId: 已移除的会话不算', pick({ ids: ['r'], byId: { r: { removed: true, updatedAt: 99 } } }) === undefined);
+check('pickSessionId: 空快照返回 undefined', pick(undefined) === undefined && pick({}) === undefined);
+check('pickSessionId: 支持 list.byId 形态', pick({ list: { byId: { z: { updatedAt: 1 } } } }) === 'z');
+check('pickSessionId: 返回字符串而不是快照对象', typeof pick(snap) === 'string', typeof pick(snap));
 
 // ---- 面板渲染 ---------------------------------------------------------------
 const Panel = panelEntry.comp;
