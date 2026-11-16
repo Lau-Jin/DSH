@@ -65,6 +65,12 @@ bundle 由包内 `cordis.patch.yml` 自动挂载，宿主半身按运行时探�
 
 > **标准流程铁律**：所有插件更新统一走「仓库代码更新 → npm 包发布 → 插件安装更新」三段式。不再有本地 `link:` 安装、一键脚本或旧宿主兼容转发；禁止手工改 `profile/node_modules` 副本（pnpm 重装会按 registry 还原）。
 
+> **本地迭代例外（2026-11-16 踩过）**：确实要用 `link:` 指着源码目录时，profile 里的依赖名**必须写成包自报的名字** `dsh-session-index`（不能写成 npm 名 `dsh-session-index-lau`）。
+> 原因是 `cordis.patch.yml` 里那行 `session-index-host` 的 `name: 'dsh-session-index'` 会按 **profile 的 `node_modules` 目录名**解析；
+> 目录叫 `-lau` 时这行解析不到 → 宿主半身不加载 → 面板一片「宿主半身没加载：会话检索面板取不到数」，
+> 而 MCP 那行靠 `server-path.txt` 兜底还能跑，很容易误判成索引坏了。
+> 反方向是安全的：发版时 `sync-publish.mjs` 会把包名与 patch 行名一起改成 `-lau`，npm 装出来的目录也是 `-lau`，两边一致。
+
 ### 方式 C：手动加 MCP（不推荐，仅排障用）
 
 DSH「MCP 与技能」→ MCP 里添加 stdio server：
