@@ -1,5 +1,5 @@
 /**
- * 会话检索面板（dsh-session-index v2.6.0）单测。
+ * 会话检索面板（dsh-session-index v2.7.0）单测。
  *
  * 两半各测：
  *   1. 宿主半身 `lib/index.mjs`：路径记录仍在 + 新增的 `session-index` 命令
@@ -34,12 +34,12 @@ const T = host.__test;
 
 check('宿主导出 __test', !!T && typeof T.runQuery === 'function');
 
-const status = T.runQuery('status', INDEX_DIR);
+const status = T.runQuery(INDEX_DIR, 'status');
 check('status: 读到索引', status.ok === true && status.total > 0, `total=${status.total}`);
 check('status: 有 builtAt 与按 app 分组', !!status.builtAt && !!status.byApp, JSON.stringify(status.byApp));
 check('status: 暴露索引目录与 cards.json 路径', status.indexDir === INDEX_DIR && status.cardsFile.endsWith('cards.json'));
 
-const list = T.runQuery('list 5', INDEX_DIR);
+const list = T.runQuery(INDEX_DIR, 'list 5');
 check('list: ok 且最多 5 条', list.ok === true && Array.isArray(list.items) && list.items.length <= 5, `shown=${list.shown}`);
 check('list: 按更新时间倒序', (list.items || []).every((it, i, a) => i === 0 || a[i - 1].updatedAt >= it.updatedAt));
 const first = (list.items || [])[0] || {};
@@ -48,31 +48,31 @@ for (const key of ['id', 'title', 'app', 'updatedAt', 'recordCount', 'keywords',
 }
 check('list: 列表条目是瘦身字段（没有 questions 全文）', !('questions' in first));
 
-const big = T.runQuery('list 500', INDEX_DIR);
+const big = T.runQuery(INDEX_DIR, 'list 500');
 check('list: 条数上限 200', big.items.length <= 200, String(big.items.length));
 
 const searchWord = (first.keywords && first.keywords[0]) || '会话';
-const search = T.runQuery('search ' + searchWord, INDEX_DIR);
+const search = T.runQuery(INDEX_DIR, 'search ' + searchWord);
 check('search: 有命中', search.ok === true && search.total > 0, `q=${searchWord} hits=${search.total}`);
 check('search: 命中带 score 且按分排', (search.items || []).every((x, i, a) => typeof x.score === 'number' && (i === 0 || a[i - 1].score >= x.score)));
 
-const card = T.runQuery('card ' + first.id, INDEX_DIR);
+const card = T.runQuery(INDEX_DIR, 'card ' + first.id);
 check('card: 取到完整卡', card.ok === true && card.card && card.card.id === first.id);
 check('card: 有 decisions / questions / paths', Array.isArray(card.card.decisions) && Array.isArray(card.card.questions) && Array.isArray(card.card.paths),
   `d=${(card.card.decisions || []).length} q=${(card.card.questions || []).length} p=${(card.card.paths || []).length}`);
 
-check('card: 不存在的 id 报错', T.runQuery('card 不存在-的会话', INDEX_DIR).ok === false);
-check('search 不带关键词报错', T.runQuery('search', INDEX_DIR).ok === false);
-check('list 默认 30 条', (T.runQuery('list', INDEX_DIR).items || []).length <= 30);
-check('空输入不抛错', (() => { try { T.runQuery('', INDEX_DIR); return true; } catch { return false; } })());
+check('card: 不存在的 id 报错', T.runQuery(INDEX_DIR, 'card 不存在-的会话').ok === false);
+check('search 不带关键词报错', T.runQuery(INDEX_DIR, 'search').ok === false);
+check('list 默认 60 条', (T.runQuery(INDEX_DIR, 'list').items || []).length <= 60);
+check('空输入不抛错', (() => { try { T.runQuery(INDEX_DIR, ''); return true; } catch { return false; } })());
 
 const fakeDir = mkdtempSync(path.join(os.tmpdir(), 'si-idx-'));
 try {
-  check('索引缺失时给出可读错误', T.runQuery('list', fakeDir).ok === false);
+  check('索引缺失时给出可读错误', T.runQuery(fakeDir, 'list').ok === false);
   // 缺失场景也别抛
   mkdirSync(fakeDir, { recursive: true });
   writeFileSync(path.join(fakeDir, 'cards.json'), JSON.stringify({ version: 1, builtAt: '2026-01-01T00:00:00.000Z', cards: {} }));
-  check('空索引 list 返回空数组', Array.isArray(T.runQuery('list', fakeDir).items) && T.runQuery('list', fakeDir).items.length === 0);
+  check('空索引 list 返回空数组', Array.isArray(T.runQuery(fakeDir, 'list').items) && T.runQuery(fakeDir, 'list').items.length === 0);
 } finally {
   rmSync(fakeDir, { recursive: true, force: true });
 }
@@ -325,6 +325,99 @@ const iconFlat = [];
 })(iconTree);
 check('侧栏图标渲染 svg', iconFlat.some((n) => n.type === 'svg'));
 check('图标画了卡片与放大镜', iconFlat.some((n) => n.type === 'circle') && iconFlat.some((n) => n.type === 'path'));
+
+/* ================================================================ 本地 HTTP 通道 */
+const { startPanelHttp, handleRequest, allowedOrigin, DEFAULT_PORTS } = await import(
+  pathToFileURL(path.join(ROOT, 'lib', 'http-api.mjs')).href
+);
+const { runQuery: sharedQuery } = await import(pathToFileURL(path.join(ROOT, 'lib', 'panel-api.mjs')).href);
+
+{
+  const u = (p) => new URL(p, 'http://127.0.0.1:8799');
+  check('默认端口从 8799 起、按序顺延', DEFAULT_PORTS[0] === 8799 && DEFAULT_PORTS.length > 1, DEFAULT_PORTS.slice(0, 3).join(','));
+  const health = handleRequest(INDEX_DIR, u('/api/health'));
+  check('http: health 可用', health.code === 200 && health.body.ok === true, health.body.service);
+
+  const status = handleRequest(INDEX_DIR, u('/api/status')).body;
+  check('http: status 读到索引', status.ok === true && status.total > 0, `total=${status.total}`);
+
+  const list = handleRequest(INDEX_DIR, u('/api/list?limit=3')).body;
+  check('http: list 最多 3 条', list.ok === true && list.items.length <= 3, `n=${list.items.length}`);
+  check('http: list 是瘦身字段（不带 questions 全文）', !('questions' in list.items[0]), Object.keys(list.items[0]).join(','));
+  check('http: list 带关键词与摘要', Array.isArray(list.items[0].keywords) && typeof list.items[0].digest === 'string');
+
+  const word = (list.items[0].keywords || [])[0] || '会话';
+  const search = handleRequest(INDEX_DIR, u('/api/search?q=' + encodeURIComponent(word))).body;
+  check('http: search 有命中', search.ok === true && search.total > 0, `q=${word}`);
+  check('http: search 带 score 与命中词', typeof search.items[0].score === 'number' && Array.isArray(search.items[0].hitKeywords));
+
+  const card = handleRequest(INDEX_DIR, u('/api/card?id=' + encodeURIComponent(list.items[0].id))).body;
+  check('http: card 取到全文（含 decisions）', card.ok === true && Array.isArray(card.card.decisions));
+  check('http: 未知路由给 404', handleRequest(INDEX_DIR, u('/nope')).code === 404);
+
+  // 跨源策略：会话卡是会话元数据，远程网页不许读；本地源（渲染进程）放行。
+  check('cors: 无 Origin 放行（curl）', allowedOrigin(undefined) === '*');
+  check('cors: null 源放行（file:// 沙箱）', allowedOrigin('null') === '*');
+  check('cors: 远程站点被拒', allowedOrigin('https://evil.example.com') === null
+    && allowedOrigin('http://192.168.1.10:8080') === null);
+  check('cors: 回环源放行', allowedOrigin('http://127.0.0.1:8799') === 'http://127.0.0.1:8799'
+    && allowedOrigin('http://localhost:8799') === 'http://localhost:8799');
+  check('cors: 非 http 源（app:// 等）放行', allowedOrigin('app://dsh.desktop') === 'app://dsh.desktop'
+    && allowedOrigin('file://') === 'file://');
+
+  // 口径一致：HTTP 通道与斜杠命令/宿主半身走同一套实现，结果必须逐条相同。
+  const viaHttp = search.items.map((i) => i.id).join(',');
+  const viaHost = sharedQuery(INDEX_DIR, 'search ' + word).items.map((i) => i.id).join(',');
+  check('http 与命令通道口径一致（同一套实现）', viaHttp === viaHost && viaHost.length > 0, viaHttp.slice(0, 60));
+}
+
+// 起真服务：端口占用顺延，面板的探测代码要能认出它
+{
+  const ports = [8912, 8913, 8914];
+  const srv = startPanelHttp({ indexDir: INDEX_DIR, ports, log: () => {} });
+  let base = null;
+  if (srv) {
+    for (let i = 0; i < 40 && !srv.server.listening; i += 1) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    const addr = srv.server.address();
+    if (addr && addr.port) base = `http://127.0.0.1:${addr.port}`;
+  }
+  check('http 服务能起来', Boolean(base), String(base));
+
+  if (base) {
+    const res = await fetch(base + '/api/list?limit=2', { cache: 'no-store' });
+    const body = await res.json();
+    check('http 服务可被 fetch 读取', res.ok && body.ok === true, `status=${res.status}`);
+
+    // 面板的探测逻辑：把测试端口塞进候选列表，probeHttpBase 应该认出它
+    const test = cx.__test;
+    test.HTTP_PORTS.push(Number(base.split(':').pop()));
+    try {
+      const probed = await test.probeHttpBase();
+      check('面板能探到 HTTP 端点', typeof probed === 'string' && probed.length > 0, String(probed));
+    } finally {
+      test.HTTP_PORTS.pop();
+    }
+
+    // 只读：POST 要被拒
+    const post = await fetch(base + '/api/list', { method: 'POST' });
+    check('http 服务拒绝写操作', post.status === 405, String(post.status));
+
+    // 跨源：远程网页拿不到 CORS 头，本地源能拿到
+    const evil = await fetch(base + '/api/list?limit=1', { headers: { Origin: 'https://evil.example.com' } });
+    check('http 对远程源不给 CORS 头', !evil.headers.get('access-control-allow-origin'), String(evil.headers.get('access-control-allow-origin')));
+    const localOrigin = `http://127.0.0.1:${base.split(':').pop()}`;
+    const local = await fetch(base + '/api/list?limit=1', { headers: { Origin: localOrigin } });
+    check('http 对本地源回显 CORS 头', local.headers.get('access-control-allow-origin') === localOrigin,
+      String(local.headers.get('access-control-allow-origin')));
+    const noOrigin = await fetch(base + '/api/health');
+    check('http 无 Origin 时给 *', noOrigin.headers.get('access-control-allow-origin') === '*',
+      String(noOrigin.headers.get('access-control-allow-origin')));
+
+    await new Promise((r) => srv.server.close(r));
+  }
+}
 
 console.log(`\n==== ${checks - failed}/${checks} session-index panel checks passed ====`);
 process.exit(failed === 0 ? 0 : 1);

@@ -8,9 +8,10 @@
  */
 import { spawn } from 'node:child_process';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { inspectZip } from './lib/pack.mjs';
 
@@ -321,6 +322,32 @@ try {
   check('版本声明一致 (' + wantVer + ')', plugStd.version === wantVer && svStd.includes("const VERSION = '" + wantVer + "'"), `${pkgStd.version}/${plugStd.version}/server.mjs`);
 } catch (e) {
   check('标准形态断言', false, e.message);
+}
+
+// ---- 面板数据通道（面板与 MCP 共用一套查询实现 + 本地只读 HTTP）----
+try {
+  const svSrc = readFileSync(path.join(here, 'server.mjs'), 'utf8');
+  const httpSrc = readFileSync(path.join(here, 'lib', 'http-api.mjs'), 'utf8');
+  const panelSrc = readFileSync(path.join(here, 'lib', 'panel-api.mjs'), 'utf8');
+  const clientSrc = readFileSync(path.join(here, 'lib', 'client.js'), 'utf8');
+  const hostSrc = readFileSync(path.join(here, 'lib', 'index.mjs'), 'utf8');
+
+  check('server.mjs 挂载面板 HTTP 通道（可配端口）', svSrc.includes('startPanelHttp') && svSrc.includes('SESSION_INDEX_HTTP_PORT'), '');
+  check('HTTP 通道只绑回环、只读', httpSrc.includes("options.host || '127.0.0.1'") && httpSrc.includes('只接受 GET'), '');
+  check('HTTP 通道按源判定 CORS（远程源不放行）', httpSrc.includes('export function allowedOrigin') && httpSrc.includes("parsed.protocol === 'https:'"), '');
+  check('面板优先走 HTTP 通道', clientSrc.includes('probeHttpBase') && clientSrc.includes('/api/list'), '');
+  check('宿主半身与面板共用 panel-api（口径一致）', hostSrc.includes("from './panel-api.mjs'") && panelSrc.includes("from './cards.mjs'"), '');
+
+  const { handleRequest } = await import(pathToFileURL(path.join(here, 'lib', 'http-api.mjs')).href);
+  const idxDir = process.env.SESSION_INDEX_DIR
+    || path.join(process.env.DSH_HOME || path.join(os.homedir(), '.dsh'), 'session-index');
+  const health = handleRequest(idxDir, new URL('http://127.0.0.1/api/health'));
+  // 服务名跟 package.json 走：源目录是 dsh-session-index，发布副本被 sync-publish 改成 -lau。
+  check('HTTP health 自报服务名', health.code === 200 && health.body.ok === true && /session-index(-lau)?$/.test(health.body.service || ''), `${health.body.service}@${health.body.version}`);
+  const listProbe = handleRequest(idxDir, new URL('http://127.0.0.1/api/list?limit=1'));
+  check('HTTP list 能读到索引', listProbe.code === 200 && Array.isArray(listProbe.body.items), `n=${listProbe.body.items?.length}`);
+} catch (e) {
+  check('面板数据通道断言', false, e.message);
 }
 
 const failed = results.filter((r) => !r.ok).length;

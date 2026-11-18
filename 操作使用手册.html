@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dsh-session-index 操作使用手册 v2.5.3</title>
+<title>dsh-session-index 操作使用手册 v2.7.0</title>
 <style>
   :root{
     --bg:#f7f9fc; --panel:#ffffff; --panel-2:#f1f5fb; --line:#e2e8f2;
@@ -74,7 +74,7 @@
 <body>
 <div class="layout">
 <aside>
-  <div class="brand">dsh-session-index<small>操作使用手册 · v2.5.3</small></div>
+  <div class="brand">dsh-session-index<small>操作使用手册 · v2.7.0</small></div>
   <input id="q" type="search" placeholder="筛选章节 / 关键词…" autocomplete="off">
   <nav id="nav">
     <div class="grp">开始</div>
@@ -102,7 +102,7 @@
   <h1>dsh-session-index 操作使用手册</h1>
   <p>完全化的 MCP 插件：一条命令安装，之后自动配置、自动建索引、<b>新会话由文件事件自动识别（无需重启 DSH）</b>、索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。</p>
   <div class="badges">
-    <span class="badge">版本 <b>v2.5.3</b></span>
+    <span class="badge">版本 <b>v2.7.0</b></span>
     <span class="badge">安装命令 <b>1 条</b></span>
     <span class="badge">会话 <b>32</b>（自动增长）</span>
     <span class="badge">工具 <b>14</b> / 提示词 <b>4</b> / 资源 <b>7+1</b></span>
@@ -214,7 +214,9 @@ pnpm remove dsh-session-index-lau       # 卸载</code></pre>
     <tr><td><code>plugin.json</code></td><td>机器可读清单：14 工具、4 prompts、7 resources、自动化配置、包信息、安装方式、依赖与安全声明；也通过 <code>session-index://plugin.json</code> 暴露</td></tr>
     <tr><td><code>package.json</code> 的 <code>dsh.bundle.patch</code></td><td><b>插件页安装的关键</b>：声明 <code>./cordis.patch.yml</code>，DSH 安装器据此接受本包并在启动时自动应用这层 patch</td></tr>
     <tr><td><code>cordis.patch.yml</code></td><td>bundle 层：insert 宿主行 + MCP 行；<code>command</code>/<code>args</code>/<code>DSH_HOME</code> 用 <code>!!js</code> 表达式在加载时求值，安装路径变化无需改文件</td></tr>
-    <tr><td><code>lib/index.mjs</code></td><td>宿主半身：<code>import.meta.url</code> 是唯一 100% 可靠的安装路径来源，把 <code>server.mjs</code> 绝对路径写进 <code>server-path.txt</code>，供上面那行 MCP 配置使用</td></tr>
+    <tr><td><code>lib/index.mjs</code></td><td>宿主半身：<code>import.meta.url</code> 是唯一 100% 可靠的安装路径来源，把 <code>server.mjs</code> 绝对路径写进 <code>server-path.txt</code>，供上面那行 MCP 配置使用；另注册 <code>session-index</code> 斜杠命令，并往 <code>host-half.log</code> 追加自诊断行</td></tr>
+    <tr><td><code>lib/panel-api.mjs</code></td><td><b>三条出口共用的唯一查询实现</b>（面板 HTTP / 斜杠命令 / 单测）：列表、搜索、单卡、状态，排序与 <code>session_index_brief</code> 同源，人和机器搜出来的顺序一致</td></tr>
+    <tr><td><code>lib/http-api.mjs</code></td><td><b>面板主数据通道</b>：MCP 服务进程自开的本地只读 HTTP（<code>127.0.0.1:8799</code> 起，占用顺延），端点 <code>/api/health|status|list|search|card</code>；只绑回环、只读、不返回会话原文</td></tr>
     <tr><td><code>package.json</code> 的 <code>dsh.plugin</code></td><td>DSH 插件元信息：id、entry、install/verify/uninstall/package 命令</td></tr>
     <tr><td><code>initialize.instructions</code></td><td>握手即返回使用约定，客户端无需外部文档</td></tr>
     <tr><td><code>SKILL.md</code></td><td>自动安装到 <code>~/.dsh/skills/session-index/</code>，客户端不支持 prompts/resources 时兜底</td></tr>
@@ -230,8 +232,8 @@ node pack.mjs verify         # 校验 zip 结构
 session_index_package { "mode": "all" }   # MCP 工具，Agent 也能触发</code></pre>
   <table>
     <tr><th>包</th><th>内容</th><th>用途</th></tr>
-    <tr><td><code>dsh-session-index-v2.5.3.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
-    <tr><td><code>session-index-skill-v2.5.3.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
+    <tr><td><code>dsh-session-index-v2.7.0.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
+    <tr><td><code>session-index-skill-v2.7.0.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
   </table>
   <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方按标准流程 <code>pnpm add dsh-session-index-lau</code> 安装即可。</div>
 </section>
@@ -396,7 +398,7 @@ session_index_refresh                       // 仅改规则或需即时生效时
     <tr><td><code>pnpm add / update / remove dsh-session-index-lau</code></td><td>安装、升级、卸载（在 profile 目录执行）</td></tr>
     <tr><td><code>node pack.mjs</code>（含 status / verify / plugin / skill）</td><td>自动打包与校验</td></tr>
     <tr><td><code>node build-index.mjs --force</code></td><td>全量重建（改抽取规则后）</td></tr>
-    <tr><td><code>node smoke.mjs</code> / <code>npm run check</code></td><td>80 项自测 / 语法检查</td></tr>
+    <tr><td><code>node smoke.mjs</code> / <code>npm run check</code></td><td>93 项自测 / 语法检查</td></tr>
     <tr><td><code>node tools/push-doc.mjs [--send]</code></td><td>把手册 / 任意 md·html 推到思源桥待入库（默认只读预览，<code>--send</code> 才入队，绝不写库）</td></tr>
     <tr><td><code>node tools/push-doc.mjs --from-workbuddy [--send]</code></td><td><b>批量</b>：扫描 WorkBuddy 全部会话生成的文档，去排除/去重后一次性投递；<code>--no-exclude</code> 含临时目录、<code>--include-txt</code> 含 txt、<code>--source</code> 按生成方式、<code>--limit</code> 设上限</td></tr>
     <tr><td><code>node tools/push-doc.mjs --from-workbuddy --seed</code></td><td>只写「已推送」状态基线，<b>不投递任何文档</b>；首次启用或迁移状态文件时用</td></tr>
@@ -496,10 +498,10 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
 ├── server.mjs              MCP 服务：14 工具 + 4 prompts + resources + 通知
 ├── cordis.patch.yml        bundle 层：挂宿主行 + MCP 行（!!js 自解析命令与路径）
 ├── build-index.mjs         多源增量构建器（--quiet 静止期）
-├── smoke.mjs               80 项端到端自测
+├── smoke.mjs               93 项端到端自测
 ├── icon.svg                插件页图标（卡片 + 放大镜，64×64 SVG，938 字节）
 ├── plugin.json             机器可读插件能力清单（含安装方式与仓库信息）
-├── package.json            v2.5.3 / icon / dsh.bundle.patch / dsh.plugin / 脚本
+├── package.json            v2.7.0 / icon / dsh.bundle.patch / dsh.plugin / 脚本
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能
@@ -553,10 +555,12 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     <li><b>v2.5.1</b> <code>tools/push-doc.mjs</code> 新增 <code>--from-workbuddy</code> <b>批量模式</b>：扫描 WorkBuddy 全部会话生成的文档，内容哈希去重 + 排除临时目录 + 同名查重后一次投递；默认只读预览。实测 22 篇全部入队、重复执行全被拦截。README 补「插件怎么更新」：本机为 npm registry 来源（<code>dsh-session-index-lau</code>），插件页<b>有「更新」按钮、无需卸载重装</b>。<b>同版修订</b>：批量判重改为持久化状态文件（<code>push-doc-state.json</code>），丢弃后不重新推送、内容更新才投新版；新增 <code>--seed</code>。</li>
     <li><b>v2.5.2</b> <b>发布流程标准化</b>：新增发布前 / 安装后核验门禁 <code>dist/publish/check-release.mjs</code>（语法、80 项冒烟、功能核验、四处版本统一、MCP 握手），核验未全绿禁止推进；标准流程文档同步批量推送 / 持久化判重 / 定时自动化机制与版本统一矩阵；把源仓库的判重脚本同步进发布包与 DSH 安装，消除「同号不同内容」分叉。</li>
     <li><b>v2.5.3</b> <b>回归纯 npm 包形态</b>：移除整套「本地 link 安装 + 一键脚本」机制，删除 <code>install.mjs</code> / <code>install.cmd</code> / <code>install.sh</code> / <code>update.cmd</code> / <code>update.sh</code>；<code>package.json</code> 去掉 <code>setup</code>/<code>verify</code>/<code>uninstall</code> 脚本与安装器白名单，<code>plugin.json</code> 删除 <code>automatic</code> 旧安装键与「手工安装」方式；安装 / 升级 / 卸载统一走 <code>pnpm add</code> / <code>pnpm remove</code>。README 与本手册同步改为标准流程说明，smoke 增加标准形态断言防回潮。</li>
+    <li><b>v2.6.0</b> 新增<b>「会话检索」面板</b>（侧栏入口 + main 面板）：搜索框 + 会话卡列表（DSH 蓝 / WorkBuddy 黄左色条）+ 右侧详情（结论 · 提问 · 涉及路径 · 关键词 · 文件 · 工具）。数据走宿主半身注册的 <code>session-index</code> 斜杠命令；浏览器半身不碰文件系统。新增 <code>test-panel.mjs</code>。</li>
+    <li><b>v2.7.0</b> <b>面板改为「配合 MCP 用」</b>：MCP 服务进程新增<b>本地只读 HTTP</b>（<code>lib/http-api.mjs</code>，<code>127.0.0.1:8799</code> 起、占用顺延到 8808），面板<b>优先直连它取数</b>——不再需要会话 id、不再依赖宿主半身那一行；命令通道降为兜底。新增 <code>lib/panel-api.mjs</code> 作为面板 / 斜杠命令 / HTTP <b>三条出口共用的唯一查询实现</b>（排序与 <code>session_index_brief</code> 同源），删掉宿主半身里那套朴素打分。宿主半身补 <code>host-half.log</code> 自诊断；面板 meta 行显示当前数据通道。<code>test-panel</code> 68 → 91、<code>smoke</code> 86 → 93。</li>
   </ul>
 </section>
 
-<footer>dsh-session-index v2.5.3 · 操作使用手册 · 生成于 2026-11-14 · 零第三方依赖</footer>
+<footer>dsh-session-index v2.7.0 · 操作使用手册 · 生成于 2026-11-18 · 零第三方依赖</footer>
 </main>
 </div>
 <script>

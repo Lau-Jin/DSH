@@ -29,7 +29,7 @@ import { pack, packAll, listPacks } from './lib/pack.mjs';
 import { stageConfig, buildStageDocument, stageToken, bridgeOverview, findDuplicate, postStage, StageError } from './lib/stage.mjs';
 
 const { sessionsRoot, indexDir, workbuddyProjectsDir } = defaultPaths();
-const VERSION = '2.6.0';
+const VERSION = '2.7.0';
 const SUPPORTED_PROTOCOLS = new Set(['2024-11-05', '2025-03-26', '2025-06-18']);
 const log = (...parts) => process.stderr.write(`[dsh-session-index] ${parts.join(' ')}\n`);
 
@@ -966,4 +966,21 @@ process.stdin.on('end', () => {
   process.exit(0);
 });
 auto.start();
+
+// 面板 HTTP 通道：侧栏「会话检索」面板直连本机读取索引。
+// 它和 MCP 工具共用 lib/panel-api.mjs，所以面板看到的排序与 agent 搜到的完全一致。
+// 端口占用就顺延，全占就放弃 —— 绝不影响 MCP 服务本身。
+const httpPort = Number(process.env.SESSION_INDEX_HTTP_PORT ?? 8799);
+if (Number.isFinite(httpPort) && httpPort !== 0) {
+  try {
+    const { startPanelHttp } = await import('./lib/http-api.mjs');
+    startPanelHttp({
+      indexDir,
+      ports: [httpPort, ...httpPort + 1 <= httpPort + 9 ? Array.from({ length: 9 }, (_, i) => httpPort + 1 + i) : []],
+      log,
+    });
+  } catch (err) {
+    log('面板 HTTP 通道启动失败（不影响 MCP）：' + ((err && err.message) || err));
+  }
+}
 log(`已启动 v${VERSION} | 会话源 ${sessionsRoot} | 索引 ${indexDir} | 事件监听与自动维护已开启`);

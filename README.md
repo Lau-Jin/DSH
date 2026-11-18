@@ -5,7 +5,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.6.0** |
+| 版本 | **v2.7.0** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
 | MCP 能力 | **14 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
@@ -41,7 +41,7 @@ DSH 的会话存在 `~/.dsh/sessions/` 下，是**上千个独立 zstd 帧拼接
 
 | 行 id | 包 | 作用 |
 |---|---|---|
-| `session-index-host` | `dsh-session-index` | 宿主半身（`lib/index.mjs`）：用 `import.meta.url` 解析**真实安装目录**，把 `server.mjs` 绝对路径写进 `~/.dsh/session-index/server-path.txt` |
+| `session-index-host` | `dsh-session-index` | 宿主半身（`lib/index.mjs`）：用 `import.meta.url` 解析**真实安装目录**，把 `server.mjs` 绝对路径写进 `~/.dsh/session-index/server-path.txt`；另注册 `session-index` 斜杠命令，并往 `~/.dsh/session-index/host-half.log` 追加自诊断行 |
 | `mcp-session-index` | `@deepseek-ai/dsh-mcp-client` | MCP stdio 客户端：14 工具 / 4 提示词 / 8 资源 |
 
 那行配置里的 `command`、`args`、`DSH_HOME` 三处都是 `!!js` 表达式，**在 DSH 加载配置时求值**（不是安装时），
@@ -176,6 +176,55 @@ DSH 插件页装任何东西，底层都是一次 `pnpm install`。装不上时�
 
 ---
 
+## 「会话检索」面板（侧栏）
+
+侧栏图标「会话检索」打开 main 面板：搜索框（300 ms 防抖、Enter 立即搜、Esc 清空）+
+会话卡列表（DSH 蓝 / WorkBuddy 黄左色条）+ 右侧详情（结论 / 提问 / 涉及路径 /
+关键词点一下直接拿去搜 / 文件 / 工具）。
+
+### 两条数据通道（面板自己选，优先 HTTP）
+
+| 通道 | 谁提供 | 什么时候用 | 依赖 |
+|---|---|---|---|
+| **本地只读 HTTP**（首选） | **MCP 服务进程**自己开的 `127.0.0.1:8799`（占用就顺延到 8808） | 默认 | 只要 MCP 服务在跑；**不需要会话、不依赖宿主半身** |
+| gateway 命令通道（兜底） | 宿主半身注册的 `session-index` 斜杠命令 | HTTP 不通时 | 需要一个活的会话 id + 宿主半身那一行加载成功 |
+
+meta 行右侧会显示当前用的是哪条（`HTTP · 127.0.0.1:8799` / `命令通道`）。
+两条都不通时给一句可操作的提示，而不是把网关报错甩给人。
+
+**为什么优先 HTTP**：`commands/execute` 是**按 agent 作用域**的（wire 字段 `agentId`，
+类型 SessionId），面板必须先借一个活会话 id 才能被寻址；会话被归档 / 壳重载之后 id 失效，
+或者宿主半身那一行没加载（bundle 行名与安装目录名不一致就会这样），面板就整片取不到数。
+HTTP 通道把这三层依赖全部去掉，而且**和 agent 用的是同一份索引、同一套查询实现**
+（`lib/panel-api.mjs`），所以人和机器搜出来的顺序完全一致。
+
+### 手工验证（不用开面板）
+
+```bash
+curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"2.7.0"}
+curl "http://127.0.0.1:8799/api/list?limit=3"
+curl "http://127.0.0.1:8799/api/search?q=%E6%8F%92%E4%BB%B6"
+curl "http://127.0.0.1:8799/api/card?id=<会话id>"
+```
+
+端口记在 `~/.dsh/session-index/http-url.txt`（MCP 服务每次启动刷新）。
+接口**只绑 127.0.0.1、只读**（GET/HEAD/OPTIONS，POST 一律 405），不返回会话原文，只返回会话卡。
+**跨源按源判定**：远程 http(s) 网站不给 CORS 头（渲染进程里打开的远程网页读不到），
+本地源（回环、`file://`、`app://` 等）放行。
+
+### 面板报「宿主半身没加载」怎么办
+
+1. 先看是不是 HTTP 通道也没通：`curl http://127.0.0.1:8799/api/health`。
+   通了就是面板该走了 HTTP —— 重启 DSH 让新面板代码生效。
+2. 两个都不通 → 看 **`~/.dsh/session-index/host-half.log`**（宿主半身每次 apply 都会追加一行）：
+   - **完全没有这行文件** = 宿主半身那一行压根没被 DSH 加载 → 查 `cordis.patch.yml` 里
+     `session-index-host` 的 `name` 与 profile `node_modules` 里的**目录名**是否一致
+     （`link:` 安装时必须用包自报名 `dsh-session-index`，见上文「本地迭代例外」）；
+   - 有 `apply` 但没有 `command registered` = `commands` 服务没就位 → 看它有没有
+     `commands 服务不可用` 与后续的 `command registered（inject / ready）`。
+
+---
+
 ## 会话整理 → 思源桥「待入库」
 
 `session_index_stage` 把索引里的会话卡、结论、检索片段整理成一篇 Markdown，**投递到思源桥的待入库队列**。
@@ -297,9 +346,15 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 npm registry 来源**：profile 依赖 `dsh-session-index-lau: ^2.6.0`，
-属于上表第一行，所以插件页**有「版本」区块与「更新」按钮**——以后发新版后
-**点更新即可，不需要卸载重装**。命令行 `pnpm update <包名>` 与点按钮是同一条路径。
+**本机当前是 `link:` 开发来源**（2026-11-18 起）：profile 依赖是
+`"dsh-session-index": "link:D:\WorkBuddy工作区\Tool开发\DSH"`，属于上表第三行 ——
+插件页**没有「更新」按钮**，改代码后**完全退出 DSH 再打开**即生效（不需要 `pnpm update`）。
+**要发给别人之前**走下面的标准流程发布到 npm，届时 profile 换成
+`dsh-session-index-lau: ^<新版本>`（上表第一行，插件页有「更新」按钮）。
+
+> ⚠ `link:` 安装时依赖名必须写**包自报名 `dsh-session-index`**，不能写 npm 名 `dsh-session-index-lau`，
+> 否则 bundle patch 里 `session-index-host` 那一行解析不到 → 宿主半身不加载 → 面板假死
+> （详见上文「本地迭代例外」与「面板报宿主半身没加载怎么办」）。
 
 发布侧走 `dist/publish/` 下的标准流程（`插件发布标准流程.md`）：
 
@@ -344,8 +399,8 @@ node smoke.mjs                   # 端到端自测（含标准形态断言）
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.6.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
-| `dist/session-index-skill-v2.6.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.7.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
+| `dist/session-index-skill-v2.7.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可调 MCP 工具 `session_index_package` 触发打包。
@@ -383,13 +438,17 @@ dsh-session-index/                  # 仓库根 = 插件根
 ├── cordis.patch.yml                # bundle patch：挂宿主行 + MCP 行（含 !!js 自解析路径）
 ├── build-index.mjs                 # 索引构建（多帧 zstd → 可检索记录 + 会话卡）
 ├── pack.mjs                        # 打包 CLI（零依赖 ZIP writer）
-├── smoke.mjs                       # 80 项端到端自测
+├── smoke.mjs                       # 93 项端到端自测
+├── test-panel.mjs                  # 面板 + 本地 HTTP 通道 91 项单测
 ├── icon.svg                        # 插件页图标（package.json 的 icon 字段指向它）
 ├── plugin.json                     # 机器可读能力清单（也通过 MCP 资源暴露）
 ├── package.json                    # 元信息 + dsh.bundle.patch + dsh.plugin 声明
 ├── 操作使用手册.html                # 自包含单页手册（14 章）
 ├── lib/
-│   ├── index.mjs                   # 宿主半身：解析自身安装路径（ESM，供 bundle 挂载）
+│   ├── index.mjs                   # 宿主半身：解析自身安装路径 + 斜杠命令 + 自诊断日志
+│   ├── client.js                   # 浏览器半身：侧栏「会话检索」面板（HTTP 优先、命令兜底）
+│   ├── panel-api.mjs               # 面板 / 斜杠命令 / HTTP 共用的查询实现（唯一口径）
+│   ├── http-api.mjs                # 本地只读 HTTP（面板主通道，127.0.0.1:8799 起）
 │   ├── reader.mjs                  # 多帧 zstd 读取
 │   ├── extract.mjs                 # 事件 → 文本记录（含系统注入降噪）
 │   ├── cards.mjs                   # 会话卡 / 关联度 / 血缘
@@ -433,6 +492,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 
 | 版本 | 变更 |
 |---|---|
+| **v2.7.0** | **面板改为「配合 MCP 用」**：新增 `lib/http-api.mjs` —— MCP 服务进程自己开一个**本地只读 HTTP**（`127.0.0.1:8799` 起，占用顺延到 8808），面板优先直连它取数，**不再需要会话 id、不再依赖宿主半身那一行**；命令通道降级为兜底。新增 `lib/panel-api.mjs` 作为**面板 / 斜杠命令 / HTTP 三条出口共用的唯一查询实现**（排序与 `session_index_brief` 同源），删掉宿主半身里那套朴素打分，人和机器搜出来的顺序从此一致。宿主半身补 `host-half.log` 自诊断（面板报「宿主半身没加载」时看这个文件即可定位）。面板 meta 行显示当前数据通道（`HTTP · 127.0.0.1:8799` / `命令通道`）。`sync-publish` 的 renameFiles 补进 `lib/client.js`（npm 用户的客户端模块 id 跟包名走）。`test-panel` 68 → 91、`smoke` 86 → 93。 |
 | **v2.6.0** | 新增**「会话检索」面板**（侧栏入口 + main 面板）：搜索框 + 会话卡列表（DSH 蓝 / WorkBuddy 黄左色条）+ 右侧详情（结论 · 提问 · 涉及路径 · 关键词 · 工具）。数据走宿主半身注册的 `session-index` 命令（`ctx.remote.commands.execute`），**浏览器半身不碰文件系统**；宿主半身没加载时给一句人话提示而不是静默失败。新增 `test-panel.mjs`（57 项），版本一致性改为跟 `package.json` 对齐 |
 | **v2.5.3** | 移除整套「本地 link 安装 + 一键脚本」机制：删除 `install.mjs` / `install.cmd` / `install.sh` / `update.cmd` / `update.sh`，回归纯 npm 包形态（bundle 由 `cordis.patch.yml` 自动挂载）。`package.json` 去掉 `setup`/`verify`/`uninstall` 脚本与安装器白名单，`plugin.json` 删除 `automatic` 旧安装键与「手工安装」方式；安装 / 升级 / 卸载统一走 `pnpm add` / `pnpm remove`。README 与操作手册同步改为标准流程说明，smoke 增加标准形态断言防回潮。 |
 | **v2.5.2** | 发布流程标准化：新增发布前/后核验门禁（`dist/publish/check-release.mjs`），把「检查并核验 → 确认版本可用 → 才推进标准流程」固化为强制步骤；标准流程文档同步新机制（批量推送、持久化判重、定时自动化）与版本统一矩阵。把源仓库已生效的持久化判重脚本同步进发布包与 DSH 安装，消除「同版本号、内容不同」的分叉。 |
