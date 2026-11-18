@@ -5,7 +5,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.8.0** |
+| 版本 | **v2.8.1** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
 | MCP 能力 | **14 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
@@ -201,7 +201,7 @@ HTTP 通道把这三层依赖全部去掉，而且**和 agent 用的是同一份
 ### 手工验证（不用开面板）
 
 ```bash
-curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"2.8.0"}
+curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"2.8.1"}
 curl "http://127.0.0.1:8799/api/list?limit=3"
 curl "http://127.0.0.1:8799/api/search?q=%E6%8F%92%E4%BB%B6"
 curl "http://127.0.0.1:8799/api/card?id=<会话id>"
@@ -406,8 +406,8 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 npm registry 来源**（2026-11-18 v2.8.0 发布后切回）：profile 依赖是
-`"dsh-session-index-lau": "^2.8.0"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
+**本机当前是 npm registry 来源**（2026-11-18 v2.8.1 发布后切回）：profile 依赖是
+`"dsh-session-index-lau": "^2.8.1"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
 以后发新版后**点更新即可，不需要卸载重装**；命令行 `pnpm update dsh-session-index-lau` 与点按钮同一条路。
 
 > ⚠ 切回 npm 后，改本机代码**不再即时生效**：要走「改仓库 → 发布 npm → 插件页更新 →
@@ -466,8 +466,8 @@ node smoke.mjs                   # 端到端自测（含标准形态断言）
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.8.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
-| `dist/session-index-skill-v2.8.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.8.1.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
+| `dist/session-index-skill-v2.8.1.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可调 MCP 工具 `session_index_package` 触发打包。

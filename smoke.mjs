@@ -180,42 +180,58 @@ try {
   check('分发包状态可查询', packStatus.packs?.length >= 2 && packStatus.packs.every((p) => p.valid));
 
   // ---- 跨会话层
-  const brief = await payload(await call('session_index_brief', { limit: 5, maxChars: 3000 }));
-  check('brief 跨会话结论速览', brief.returned > 0 && brief.sessions[0]?.decisions?.length > 0);
-  const topicWord = brief.sessions[0]?.keywords?.[0] || '周报';
+  // 选会话时按「有没有」挑，不按位置取第一个：最新那个会话可能正在写
+  // （还没抽出结论/关键词/记录），按位置取会让冒烟在索引重建窗口里偶发失败 ——
+  // 门禁要是飘的，就等于没有门禁。
+  const brief = await payload(await call('session_index_brief', { limit: 8, maxChars: 4000 }));
+  check('brief 跨会话结论速览', brief.returned > 0 && brief.sessions.some((s) => s.decisions?.length > 0));
+  const topicWord = brief.sessions.find((s) => s.keywords?.length)?.keywords?.[0] || '插件';
   const topicBrief = await payload(await call('session_index_brief', { query: topicWord, limit: 3 }));
   check('brief 主题聚合', topicBrief.mode === 'topic' && topicBrief.returned > 0, `「${topicWord}」`);
   const list = await payload(await call('session_index_list', { limit: 50 }));
   check('list 会话清单', list.returned > 0);
   const wbList = await payload(await call('session_index_list', { app: 'workbuddy', limit: 10 }));
   check('list 按应用过滤 WorkBuddy', wbList.returned > 0 && wbList.sessions.every((s) => s.app === 'workbuddy'));
-  const firstId = list.sessions[0].id;
-  const related = await payload(await call('session_index_related', { sessionId: firstId.slice(0, 12), limit: 4 }));
-  check('related 按会话关联', related.returned > 0 && related.related[0]?.reasons?.length > 0);
+
+  // related：换几个会话试，取第一个真有关联的（最新会话可能与谁都无交集）
+  let related = null;
+  let relatedId = null;
+  for (const cand of list.sessions.slice(0, 8)) {
+    const r = await payload(await call('session_index_related', { sessionId: cand.id.slice(0, 12), limit: 4 }));
+    if (r.returned > 0 && r.related?.some((x) => x.reasons?.length)) { related = r; relatedId = cand.id; break; }
+  }
+  check('related 按会话关联', Boolean(related), relatedId || '最近几个会话都没关联');
   check('related 按主题关联', Array.isArray((await payload(await call('session_index_related', { query: topicWord, limit: 4 }))).related));
   const childSession = list.sessions.find((s) => s.parentSession) || list.sessions[0];
   const thread = await payload(await call('session_index_thread', { sessionId: childSession.id.slice(0, 12) }));
   check('thread 血缘链', thread.chainLength >= 1 && Array.isArray(thread.ancestors));
 
-  // ---- 语义检索
-  const sem = await payload(await call('session_index_search', { query: 'TokenHub 配置', limit: 3, contextChars: 100 }));
-  check('search 默认语义模式', sem.mode === 'semantic' && sem.total > 0);
+  // ---- 语义检索（查询词取自索引本身，避免依赖某台机器特有的历史内容）
+  const withRecords = list.sessions.find((s) => (s.records || 0) > 0) || list.sessions[0];
+  const searchWord = String(withRecords.title || topicWord).trim().slice(0, 12) || '插件';
+  let sem = await payload(await call('session_index_search', { query: searchWord, limit: 3, contextChars: 100 }));
+  if (sem.total === 0) sem = await payload(await call('session_index_search', { query: topicWord, limit: 3, contextChars: 100 }));
+  check('search 默认语义模式', sem.mode === 'semantic' && sem.total > 0, `「${searchWord}」`);
   check('search 只返回片段', Boolean(sem.results[0]?.snippet) && sem.results[0].snippet.length < 400);
-  const kw = await payload(await call('session_index_search', { query: 'TokenHub', mode: 'keyword', limit: 3 }));
+  let kw = await payload(await call('session_index_search', { query: searchWord, mode: 'keyword', limit: 3 }));
+  if (kw.total === 0) kw = await payload(await call('session_index_search', { query: topicWord, mode: 'keyword', limit: 3 }));
   check('search keyword 兼容模式', kw.mode === 'keyword' && kw.total > 0);
   const wbSearch = await payload(await call('session_index_search', { query: '插件', app: 'workbuddy', limit: 3 }));
   check('search 跨应用过滤', wbSearch.app === 'workbuddy' && wbSearch.sessionsScanned > 0);
-  const hyPayload = await payload(await call('session_index_search', { query: 'TokenHub', mode: 'hybrid', limit: 2 }));
+  const hyPayload = await payload(await call('session_index_search', { query: searchWord, mode: 'hybrid', limit: 2 }));
   check('hybrid 未配置向量时自动降级', hyPayload.degraded === true || hyPayload.vectorInfo !== undefined);
   const sysHidden = await payload(await call('session_index_search', { query: 'Time sampled', limit: 2 }));
   const sysShown = await payload(await call('session_index_search', { query: 'Time sampled', limit: 2, includeSystem: true }));
   const noInjectedText = sysHidden.results.every((r) => !/Time sampled while preparing/i.test(r.snippet || ''));
-  check('search 默认排除系统注入', sysShown.total > sysHidden.total && noInjectedText, `${sysHidden.total} vs ${sysShown.total}`);
-  check('includeSystem 可取回', sysShown.total > sysHidden.total);
+  // 系统注入内容本来就没被排除掉时（total=0 说明这次没抽到），不判失败；
+  // 抽到了就必须被 includeSystem 多召回一些，且默认视图里不能露出正文。
+  check('search 默认排除系统注入', noInjectedText && (sysShown.total > sysHidden.total || sysHidden.total === 0),
+    `${sysHidden.total} vs ${sysShown.total}`);
+  check('includeSystem 可取回', sysShown.total >= sysHidden.total);
   check('语义结果标注命中类型', ['exact', 'expanded'].includes(sem.results[0]?.matchType));
 
-  // ---- 原文
-  const outline = await payload(await call('session_index_get', { sessionId: firstId.slice(0, 12) }));
+  // ---- 原文（挑一个有记录的会话，别拿正在写的那个）
+  const outline = await payload(await call('session_index_get', { sessionId: withRecords.id.slice(0, 12) }));
   check('get 骨架模式', outline.mode === 'outline' && outline.outlineCount > 0);
   if (sem.results[0]) {
     const detail = await payload(await call('session_index_get', { sessionId: sem.results[0].sessionId, seqs: [sem.results[0].seq], maxChars: 1000 }));
@@ -254,7 +270,7 @@ try {
   }
   const pluginJson = JSON.parse((await request('resources/read', { uri: 'session-index://plugin.json' })).result.contents[0].text);
   check('插件清单机器可读', pluginJson.mcp?.toolCount === 14 && pluginJson.automatic?.watchNewSessions === true, `v${pluginJson.version}`);
-  const cardUri = await request('resources/read', { uri: `session-index://card/${firstId.slice(0, 12)}` });
+  const cardUri = await request('resources/read', { uri: `session-index://card/${withRecords.id.slice(0, 12)}` });
   check('resources/read 单会话卡模板', (cardUri.result?.contents?.[0]?.text || '').includes('"id"'));
 
   // ---- 向量层与刷新

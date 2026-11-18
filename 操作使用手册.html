@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dsh-session-index 操作使用手册 v2.8.0</title>
+<title>dsh-session-index 操作使用手册 v2.8.1</title>
 <style>
   :root{
     --bg:#f7f9fc; --panel:#ffffff; --panel-2:#f1f5fb; --line:#e2e8f2;
@@ -74,7 +74,7 @@
 <body>
 <div class="layout">
 <aside>
-  <div class="brand">dsh-session-index<small>操作使用手册 · v2.8.0</small></div>
+  <div class="brand">dsh-session-index<small>操作使用手册 · v2.8.1</small></div>
   <input id="q" type="search" placeholder="筛选章节 / 关键词…" autocomplete="off">
   <nav id="nav">
     <div class="grp">开始</div>
@@ -102,7 +102,7 @@
   <h1>dsh-session-index 操作使用手册</h1>
   <p>完全化的 MCP 插件：一条命令安装，之后自动配置、自动建索引、<b>新会话由文件事件自动识别（无需重启 DSH）</b>、索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。</p>
   <div class="badges">
-    <span class="badge">版本 <b>v2.8.0</b></span>
+    <span class="badge">版本 <b>v2.8.1</b></span>
     <span class="badge">安装命令 <b>1 条</b></span>
     <span class="badge">会话 <b>32</b>（自动增长）</span>
     <span class="badge">工具 <b>14</b> / 提示词 <b>4</b> / 资源 <b>7+1</b></span>
@@ -233,8 +233,8 @@ node pack.mjs verify         # 校验 zip 结构
 session_index_package { "mode": "all" }   # MCP 工具，Agent 也能触发</code></pre>
   <table>
     <tr><th>包</th><th>内容</th><th>用途</th></tr>
-    <tr><td><code>dsh-session-index-v2.8.0.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
-    <tr><td><code>session-index-skill-v2.8.0.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
+    <tr><td><code>dsh-session-index-v2.8.1.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
+    <tr><td><code>session-index-skill-v2.8.1.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
   </table>
   <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方按标准流程 <code>pnpm add dsh-session-index-lau</code> 安装即可。</div>
 </section>
@@ -502,7 +502,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
 ├── smoke.mjs               93 项端到端自测
 ├── icon.svg                插件页图标（卡片 + 放大镜，64×64 SVG，938 字节）
 ├── plugin.json             机器可读插件能力清单（含安装方式与仓库信息）
-├── package.json            v2.8.0 / icon / dsh.bundle.patch / dsh.plugin / 脚本
+├── package.json            v2.8.1 / icon / dsh.bundle.patch / dsh.plugin / 脚本
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能
@@ -562,7 +562,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     <li><b>v2.6.0</b> 新增<b>「会话检索」面板</b>（侧栏入口 + main 面板）：搜索框 + 会话卡列表（DSH 蓝 / WorkBuddy 黄左色条）+ 右侧详情（结论 · 提问 · 涉及路径 · 关键词 · 文件 · 工具）。数据走宿主半身注册的 <code>session-index</code> 斜杠命令；浏览器半身不碰文件系统。新增 <code>test-panel.mjs</code>。</li>
     <li><b>v2.7.0</b> <b>面板改为「配合 MCP 用」</b>：MCP 服务进程新增<b>本地只读 HTTP</b>（<code>lib/http-api.mjs</code>，<code>127.0.0.1:8799</code> 起、占用顺延到 8808），面板<b>优先直连它取数</b>——不再需要会话 id、不再依赖宿主半身那一行；命令通道降为兜底。新增 <code>lib/panel-api.mjs</code> 作为面板 / 斜杠命令 / HTTP <b>三条出口共用的唯一查询实现</b>（排序与 <code>session_index_brief</code> 同源），删掉宿主半身里那套朴素打分。宿主半身补 <code>host-half.log</code> 自诊断；面板 meta 行显示当前数据通道。<code>test-panel</code> 68 → 91、<code>smoke</code> 86 → 93。</li>
   </ul>
-  <h3>v2.8.0 跨终端同步</h3>
+  <h3>v2.8.1 跨终端同步</h3>
   <p>面板 meta 行右侧的「同步」按钮打开同步模块：填一个 <b>GitHub Private 仓地址</b>（建议
   <code>git@github.com:你/dsh-session-index-data.git</code>）→ 保存 → <b>上传到远端</b>；
   另一台机器装好插件、填同一地址 → <b>从远端合并</b>。配置过之后，面板每次打开都会看一眼远端，
@@ -587,7 +587,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
   功能（插件、技能、面板、14 个工具）随插件安装走，<b>不需要同步</b>。</p>
 </section>
 
-<footer>dsh-session-index v2.8.0 · 操作使用手册 · 生成于 2026-11-18 · 零第三方依赖</footer>
+<footer>dsh-session-index v2.8.1 · 操作使用手册 · 生成于 2026-11-18 · 零第三方依赖</footer>
 </main>
 </div>
 <script>

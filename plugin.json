@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-index",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "icon": "icon.svg",
   "displayName": {
     "zh": "全会话索引与跨会话记忆",
@@ -78,8 +78,8 @@
   },
   "packages": {
     "directory": "dist",
-    "plugin": "dsh-session-index-v2.8.0.zip",
-    "skill": "session-index-skill-v2.8.0.zip",
+    "plugin": "dsh-session-index-v2.8.1.zip",
+    "skill": "session-index-skill-v2.8.1.zip",
     "generator": "lib/pack.mjs (zero dependency ZIP writer)",
     "contents": ["MANIFEST.json", "INSTALL.md"],
     "excludes": ["会话索引分片 *.jsonl.gz", "meta/cards/notes/vectors.json", "备份与临时文件", "已有 zip"]
