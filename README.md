@@ -406,15 +406,15 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 `link:` 开发来源**（2026-11-18 起）：profile 依赖是
-`"dsh-session-index": "link:D:\WorkBuddy工作区\Tool开发\DSH"`，属于上表第三行 ——
-插件页**没有「更新」按钮**，改代码后**完全退出 DSH 再打开**即生效（不需要 `pnpm update`）。
-**要发给别人之前**走下面的标准流程发布到 npm，届时 profile 换成
-`dsh-session-index-lau: ^<新版本>`（上表第一行，插件页有「更新」按钮）。
+**本机当前是 npm registry 来源**（2026-11-18 v2.8.0 发布后切回）：profile 依赖是
+`"dsh-session-index-lau": "^2.8.0"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
+以后发新版后**点更新即可，不需要卸载重装**；命令行 `pnpm update dsh-session-index-lau` 与点按钮同一条路。
 
-> ⚠ `link:` 安装时依赖名必须写**包自报名 `dsh-session-index`**，不能写 npm 名 `dsh-session-index-lau`，
-> 否则 bundle patch 里 `session-index-host` 那一行解析不到 → 宿主半身不加载 → 面板假死
-> （详见上文「本地迭代例外」与「面板报宿主半身没加载怎么办」）。
+> ⚠ 切回 npm 后，改本机代码**不再即时生效**：要走「改仓库 → 发布 npm → 插件页更新 →
+> 完全退出 DSH 再打开」。想边改边看效果时，把 profile 依赖临时指回源码目录
+> （`"dsh-session-index": "link:<源码目录>"` + bundles 同名 + 删掉 `-lau` 那条），
+> 但**依赖名必须用包自报名**，否则 bundle patch 里 `session-index-host` 那一行解析不到，
+> 宿主半身不加载、面板会假死（详见上文「本地迭代例外」与「面板报宿主半身没加载怎么办」）。
 
 发布侧走 `dist/publish/` 下的标准流程（`插件发布标准流程.md`）：
 
