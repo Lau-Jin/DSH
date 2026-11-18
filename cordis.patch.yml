@@ -38,3 +38,7 @@
           SESSION_INDEX_AUTO_INTERVAL_MS: "60000"
           SESSION_INDEX_AUTO_QUIET_MS: "45000"
           SESSION_INDEX_WATCH: "1"
+          # 面板 HTTP 通道的跨源白名单（逗号分隔；* = 全放行）。
+          # 留空 = 默认只放行本机来源（回环 / 本机名 / .localhost 等 / dsh-app:// 这类自定义 scheme）。
+          # 万一渲染进程的源被误判，把它的 Origin 填进来即可（例如 http://192.168.1.10:8326）。
+          SESSION_INDEX_HTTP_ALLOW_ORIGIN: ""
