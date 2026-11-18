@@ -5,7 +5,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.7.0** |
+| 版本 | **v2.8.0** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
 | MCP 能力 | **14 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
@@ -201,7 +201,7 @@ HTTP 通道把这三层依赖全部去掉，而且**和 agent 用的是同一份
 ### 手工验证（不用开面板）
 
 ```bash
-curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"2.7.0"}
+curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"2.8.0"}
 curl "http://127.0.0.1:8799/api/list?limit=3"
 curl "http://127.0.0.1:8799/api/search?q=%E6%8F%92%E4%BB%B6"
 curl "http://127.0.0.1:8799/api/card?id=<会话id>"
@@ -222,6 +222,66 @@ curl "http://127.0.0.1:8799/api/card?id=<会话id>"
      （`link:` 安装时必须用包自报名 `dsh-session-index`，见上文「本地迭代例外」）；
    - 有 `apply` 但没有 `command registered` = `commands` 服务没就位 → 看它有没有
      `commands 服务不可用` 与后续的 `command registered（inject / ready）`。
+
+---
+
+## 跨终端同步（面板 → 私有数据仓）
+
+把**会话卡 + 长期记忆**推到一个 GitHub **Private** 仓；另一台装了本插件的机器拉取合并后，
+也能搜到这台机器的历史结论与记忆。功能本身（插件、技能、面板、14 个工具）**不需要同步** ——
+它们随插件安装走，另一终端 `pnpm add` / 插件页安装即得。
+
+### 面板四步
+
+1. 面板 meta 行右侧点 **「同步」**；
+2. 填一个 **Private** 仓地址（建议 `git@github.com:你/dsh-session-index-data.git`）→ **保存地址**；
+3. **上传到远端**（本机 → 仓）；另一台机器上装好插件、填同一地址 → **从远端合并**；
+4. 面板顶部会出现「远端有新数据（N 张会话卡）」横幅，点一下即合并 —— 这就是「装上后自动获取」。
+
+也可以不走 git：**导出 zip** 生成 `~/.dsh/session-index/exports/session-index-data-<时间>.zip`，
+拷到另一台机器用「导入合并」打开（同样是合并，不会覆盖那边的新数据）。
+
+### 同步范围与合并语义
+
+| | 内容 | 说明 |
+|---|---|---|
+| **同步** | `cards.json` 会话卡、`notes.json` 长期记忆 | 几百 KB；另一终端可 `brief / search / related / card` + 记忆召回 |
+| **不同步** | 记录分片 `*.jsonl.gz`（会话原文） | 几十 MB 且含隐私；另一终端 `get` 取不到原文是**取舍不是缺陷** |
+| **不同步** | `meta.json`、`host-half.log`、`sync.json`、`sync-remote/` | 本机派生数据 / 本机状态 |
+
+**合并，绝不覆盖**：同 id 取 `updatedAt` 更新的那份；两边独有的都保留；记忆再按「类型 + 文本」
+去重一次（两台机器各自 `remember` 同一句话不会变成两条），标签取并集、重要度取最大。
+push 与 pull 是**同一个 union 合并**，区别只是最后要不要把结果推上去。
+
+**幂等**：进仓的文件做了规范化（对象键递归排序、记忆排序、抹掉本机时间戳），
+所以「同样的数据 → 同样的字节」，重复推送是 `changed: false`，两台机器不会互相追着时间戳提交。
+
+### 手工验证 / 排障
+
+```bash
+curl -H "X-Session-Index-Sync: 1" http://127.0.0.1:8799/api/sync/status
+curl -X POST -H "X-Session-Index-Sync: 1" -H "Content-Type: application/json" \
+     -d '{"repo":"git@github.com:你/dsh-session-index-data.git"}' http://127.0.0.1:8799/api/sync/config
+curl -X POST -H "X-Session-Index-Sync: 1" -d '{}' http://127.0.0.1:8799/api/sync/push
+curl -X POST -H "X-Session-Index-Sync: 1" -d '{}' http://127.0.0.1:8799/api/sync/pull
+```
+
+- **没有 git**：接口会明说「这台机器没有 git 命令」；装 git 即可。
+- **认证失败 / Repository not found**：SSH key 没加到 GitHub，或仓不是 Private / 还没创建。
+- **远端没有数据**：先在一台机器点「上传」。
+- **挂起**：不会 —— git 一律 `GIT_TERMINAL_PROMPT=0` + `BatchMode=yes`，需要交互时直接报错退出，
+  绝不把 MCP 进程吊在那等输入。
+
+### 写接口的防护
+
+`/api/sync/*` 是本插件**唯一会写盘/调 git** 的一组接口，三道闸：
+
+1. 只绑 `127.0.0.1`；
+2. **Origin 按源判定**（远程 http(s) 网站不给 CORS 头，预检直接 403）；
+3. **必须带 `X-Session-Index-Sync: 1` 头** —— 自定义头强制浏览器先发预检，
+   远程网页的 `no-cors` 简单请求到不了服务端（否则能被网页偷偷触发拉取）。
+
+`import` 只接受 `exports/` 目录下的 zip，不给借道读任意路径。
 
 ---
 
@@ -399,8 +459,8 @@ node smoke.mjs                   # 端到端自测（含标准形态断言）
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.7.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
-| `dist/session-index-skill-v2.7.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.8.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
+| `dist/session-index-skill-v2.8.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可调 MCP 工具 `session_index_package` 触发打包。
@@ -438,17 +498,19 @@ dsh-session-index/                  # 仓库根 = 插件根
 ├── cordis.patch.yml                # bundle patch：挂宿主行 + MCP 行（含 !!js 自解析路径）
 ├── build-index.mjs                 # 索引构建（多帧 zstd → 可检索记录 + 会话卡）
 ├── pack.mjs                        # 打包 CLI（零依赖 ZIP writer）
-├── smoke.mjs                       # 93 项端到端自测
+├── smoke.mjs                       # 98 项端到端自测
 ├── test-panel.mjs                  # 面板 + 本地 HTTP 通道 91 项单测
+├── test-sync.mjs                   # 跨终端同步 40 项单测（本地裸仓当远端，不联网）
 ├── icon.svg                        # 插件页图标（package.json 的 icon 字段指向它）
 ├── plugin.json                     # 机器可读能力清单（也通过 MCP 资源暴露）
 ├── package.json                    # 元信息 + dsh.bundle.patch + dsh.plugin 声明
 ├── 操作使用手册.html                # 自包含单页手册（14 章）
 ├── lib/
 │   ├── index.mjs                   # 宿主半身：解析自身安装路径 + 斜杠命令 + 自诊断日志
-│   ├── client.js                   # 浏览器半身：侧栏「会话检索」面板（HTTP 优先、命令兜底）
+│   ├── client.js                   # 浏览器半身：侧栏「会话检索」面板（HTTP 优先、命令兜底、同步模块）
 │   ├── panel-api.mjs               # 面板 / 斜杠命令 / HTTP 共用的查询实现（唯一口径）
-│   ├── http-api.mjs                # 本地只读 HTTP（面板主通道，127.0.0.1:8799 起）
+│   ├── http-api.mjs                # 本地只读 HTTP + /api/sync/*（面板主通道，127.0.0.1:8799 起）
+│   ├── sync.mjs                    # 跨终端同步：合并语义 + git 推拉 + 本地 zip 导入导出
 │   ├── reader.mjs                  # 多帧 zstd 读取
 │   ├── extract.mjs                 # 事件 → 文本记录（含系统注入降噪）
 │   ├── cards.mjs                   # 会话卡 / 关联度 / 血缘
@@ -492,6 +554,7 @@ dsh-session-index/                  # 仓库根 = 插件根
 
 | 版本 | 变更 |
 |---|---|
+| **v2.8.0** | 新增**跨终端同步**（面板「同步」模块 + `lib/sync.mjs` + `/api/sync/*`）：把**会话卡 + 长期记忆**推到 GitHub **Private** 数据仓，另一台终端拉取合并即可继续搜到历史结论；**不同步会话原文分片**（取舍，已写明）。合并是 union（同 id 取新、两边独有都保留、记忆按类型+文本去重、标签取并集），**绝不覆盖**；进仓字节做规范化（键排序 + 抹掉本机时间戳），重复推送 `changed: false`，两台机器不会互相追着时间戳提交。面板另有**本地导出 / 导入 zip**（不走 git 的手动搬运）。写接口三道闸：只绑回环 + Origin 按源判定 + 必须带 `X-Session-Index-Sync` 头（堵 `no-cors` CSRF），`import` 只认 `exports/` 目录。新增 `test-sync.mjs` 40 项（本地裸仓当远端，A推→B拉→B推→A拉双向验证）；`smoke` 93 → 98。 |
 | **v2.7.0** | **面板改为「配合 MCP 用」**：新增 `lib/http-api.mjs` —— MCP 服务进程自己开一个**本地只读 HTTP**（`127.0.0.1:8799` 起，占用顺延到 8808），面板优先直连它取数，**不再需要会话 id、不再依赖宿主半身那一行**；命令通道降级为兜底。新增 `lib/panel-api.mjs` 作为**面板 / 斜杠命令 / HTTP 三条出口共用的唯一查询实现**（排序与 `session_index_brief` 同源），删掉宿主半身里那套朴素打分，人和机器搜出来的顺序从此一致。宿主半身补 `host-half.log` 自诊断（面板报「宿主半身没加载」时看这个文件即可定位）。面板 meta 行显示当前数据通道（`HTTP · 127.0.0.1:8799` / `命令通道`）。`sync-publish` 的 renameFiles 补进 `lib/client.js`（npm 用户的客户端模块 id 跟包名走）。`test-panel` 68 → 91、`smoke` 86 → 93。 |
 | **v2.6.0** | 新增**「会话检索」面板**（侧栏入口 + main 面板）：搜索框 + 会话卡列表（DSH 蓝 / WorkBuddy 黄左色条）+ 右侧详情（结论 · 提问 · 涉及路径 · 关键词 · 工具）。数据走宿主半身注册的 `session-index` 命令（`ctx.remote.commands.execute`），**浏览器半身不碰文件系统**；宿主半身没加载时给一句人话提示而不是静默失败。新增 `test-panel.mjs`（57 项），版本一致性改为跟 `package.json` 对齐 |
 | **v2.5.3** | 移除整套「本地 link 安装 + 一键脚本」机制：删除 `install.mjs` / `install.cmd` / `install.sh` / `update.cmd` / `update.sh`，回归纯 npm 包形态（bundle 由 `cordis.patch.yml` 自动挂载）。`package.json` 去掉 `setup`/`verify`/`uninstall` 脚本与安装器白名单，`plugin.json` 删除 `automatic` 旧安装键与「手工安装」方式；安装 / 升级 / 卸载统一走 `pnpm add` / `pnpm remove`。README 与操作手册同步改为标准流程说明，smoke 增加标准形态断言防回潮。 |

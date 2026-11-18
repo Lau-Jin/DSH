@@ -340,12 +340,26 @@ try {
 
   const { handleRequest } = await import(pathToFileURL(path.join(here, 'lib', 'http-api.mjs')).href);
   const idxDir = process.env.SESSION_INDEX_DIR
-    || path.join(process.env.DSH_HOME || path.join(os.homedir(), '.dsh'), 'session-index');
-  const health = handleRequest(idxDir, new URL('http://127.0.0.1/api/health'));
+    || path.join(process.env.DSH_HOME || path.join(os.homedir(), '.dsh'), 'session-index');  const health = handleRequest(idxDir, new URL('http://127.0.0.1/api/health'));
   // 服务名跟 package.json 走：源目录是 dsh-session-index，发布副本被 sync-publish 改成 -lau。
   check('HTTP health 自报服务名', health.code === 200 && health.body.ok === true && /session-index(-lau)?$/.test(health.body.service || ''), `${health.body.service}@${health.body.version}`);
   const listProbe = handleRequest(idxDir, new URL('http://127.0.0.1/api/list?limit=1'));
   check('HTTP list 能读到索引', listProbe.code === 200 && Array.isArray(listProbe.body.items), `n=${listProbe.body.items?.length}`);
+
+  // 跨终端同步（lib/sync.mjs + /api/sync/*）
+  const syncSrc = readFileSync(path.join(here, 'lib', 'sync.mjs'), 'utf8');
+  check('同步：合并而不是覆盖', syncSrc.includes('export function mergeCards') && syncSrc.includes('export function mergeNotes'), '');
+  check('同步：git 不交互（不挂起 MCP 进程）', syncSrc.includes('GIT_TERMINAL_PROMPT') && syncSrc.includes('BatchMode=yes'), '');
+  check('同步：远端文件规范化（防两台机器互推时间戳）',
+    syncSrc.includes('function canonicalize') && syncSrc.includes('builtAt: null') && syncSrc.includes('updatedAt: null'), '');
+  check('面板带同步模块与自定义头',
+    clientSrc.includes('/api/sync/') && clientSrc.includes('X-Session-Index-Sync'), '');
+  const { syncStatus } = await import(pathToFileURL(path.join(here, 'lib', 'sync.mjs')).href);
+  const syncState = syncStatus(idxDir);
+  check('同步状态可读（未配置时给原因，已配置时给分支）',
+    typeof syncState.local.cards === 'number'
+    && (syncState.configured ? Boolean(syncState.branch) : Boolean(syncState.reason)),
+    syncState.configured ? `repo=${syncState.repo}` : syncState.reason);
 } catch (e) {
   check('面板数据通道断言', false, e.message);
 }
