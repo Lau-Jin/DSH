@@ -41,7 +41,7 @@
     "check-icon.mjs",
     "lib/",
     "skill/",
-    "tools/",
+    "tools/push-doc.mjs",
     "dist/*.zip"
   ],
   "dsh": {

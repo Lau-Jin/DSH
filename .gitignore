@@ -19,3 +19,6 @@ vectors.json
 .DS_Store
 Thumbs.db
 .workbuddy/
+
+# 本机私有路径配置（发布工具用，不入库）
+tools/publish/config.local.json

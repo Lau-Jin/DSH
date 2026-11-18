@@ -1,0 +1,17 @@
+{
+  "_说明": "本机私有路径配置。复制 config.example.json 改名成 config.local.json 后按本机实际情况改。这个文件不入库（.gitignore 已排除）。",
+  "_优先级": "环境变量 > 本文件 > 默认值（副本落 <仓根>/dist/publish、profile 落 ~/.dsh/profiles/desktop）",
+  "copyRoot": "D:/WorkBuddy工作区/Tool开发/dist/publish",
+  "profileDir": "C:/Users/Administrator/.dsh/profiles/desktop",
+  "plugins": {
+    "session-index": {
+      "src": "D:/WorkBuddy工作区/Tool开发/DSH"
+    },
+    "weekly-report": {
+      "src": "D:/WorkBuddy工作区/Tool开发/dsh-weekly-report"
+    },
+    "siyuan-bridge": {
+      "src": "D:/WorkBuddy工作区/Tool开发/dsh-siyuan-bridge"
+    }
+  }
+}

@@ -416,14 +416,21 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 > 但**依赖名必须用包自报名**，否则 bundle patch 里 `session-index-host` 那一行解析不到，
 > 宿主半身不加载、面板会假死（详见上文「本地迭代例外」与「面板报宿主半身没加载怎么办」）。
 
-发布侧走 `dist/publish/` 下的标准流程（`插件发布标准流程.md`）：
+发布侧走**随仓库走的**标准流程（`tools/publish/`，三个插件共用同一套工具）：
 
 ```bash
-node sync-publish.mjs session-index                       # 生成改名后的发布副本并自检
-cd dsh-session-index-lau && npm publish --access public
-# 等 npm staged publishing 生效（实测约 1 分钟）
+cd tools/publish
+node sync-publish.mjs session-index                       # ④ 生成改名后的发布副本并自检
+node check-release.mjs session-index --pre                # ④.5 发布前门禁（未全绿禁止发布）
+cd <副本根>/dsh-session-index-lau && npm publish --access public
+# 等 npm staged publishing 生效（实测 1~8 分钟）
 cd ~/.dsh/profiles/desktop && npx -y pnpm@11.28.5 update dsh-session-index-lau@<新版本>
+node check-release.mjs session-index --post               # ⑧ 安装后核验（版本四处统一 + MCP 握手）
 ```
+
+完整流程见 [`tools/publish/插件发布标准流程.md`](./tools/publish/插件发布标准流程.md)；
+换机器时复制 `tools/publish/config.example.json` 为 `config.local.json` 改路径即可，
+**脚本一行都不用改**（路径解析见 `tools/publish/paths.mjs`）。
 
 注意 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 要同步登记新版本，
 否则供应链冷却期会让 pnpm 静默回退旧版。更新后**完全退出 DSH 再打开**，
@@ -525,6 +532,12 @@ dsh-session-index/                  # 仓库根 = 插件根
 │   └── stage.mjs                   # 会话整理 → 思源桥待入库（渲染 + HTTP 投递）
 ├── skill/SKILL.md                  # 自动接入用技能
 ├── tools/push-doc.mjs             # 推送任意 md/html 到思源桥待入库（默认只读预览）
+├── tools/publish/                 # 跨插件共用的发布工具链（随仓库走版本，见其 README）
+│   ├── 插件发布标准流程.md          # 完整发布流程 ①→⑨
+│   ├── sync-publish.mjs           # ④ 同步 npm 发布副本（改名 + 发布化 + 自检）
+│   ├── check-release.mjs          # ④.5 / ⑧ 发布核验门禁
+│   ├── update-plugin.mjs          # ⑦ 安装更新助手
+│   └── paths.mjs                  # 路径解析（换机器改 config.local.json 即可）
 └── dist/                           # 自动生成的分发包（git 忽略）
 ```
 
