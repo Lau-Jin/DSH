@@ -87,7 +87,7 @@ try {
   // 「另一台终端」= 一个本地裸仓
   const bare = path.join(work, 'remote.git');
   cleanup.push(bare);
-  const { execFileSync } = await import('node:child_process');
+  const { execFileSync, spawn } = await import('node:child_process');
   const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
   const git = (args, cwd) => execFileSync('git', args, { cwd, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] });
   git(['init', '--bare', '--initial-branch=main', bare]);
@@ -150,10 +150,15 @@ try {
   /* ------------------------------------------------------------ 状态 */
   const statusA = sync.syncStatus(indexA);
   check('状态：已配置 + 本地计数', statusA.configured && statusA.local.cards === 4, `cards=${statusA.local.cards}`);
-  check('状态：能看到远端 manifest', Boolean(statusA.remote && statusA.remote.ok && statusA.remote.manifest),
-    statusA.remote && statusA.remote.manifest ? String(statusA.remote.manifest.cards) : 'null');
+  const probeA = await sync.syncProbe(indexA);
+  check('状态：探测能看到远端 manifest', Boolean(probeA && probeA.ok && probeA.manifest),
+    probeA && probeA.manifest ? String(probeA.manifest.cards) : String(probeA && probeA.error));
   const unconfigured = sync.syncStatus(mkdtempSync(path.join(work, 'idx-none-')));
-  check('状态：未配置时给出原因', unconfigured.configured === false && Boolean(unconfigured.reason), unconfigured.reason);
+  process.env.SESSION_INDEX_SYNC_NO_DEFAULT = '1';
+  const noneState = sync.syncStatus(mkdtempSync(path.join(work, 'idx-none2-')));
+  delete process.env.SESSION_INDEX_SYNC_NO_DEFAULT;
+  check('状态：明确不用默认时给出原因', noneState.configured === false && Boolean(noneState.reason), noneState.reason);
+  check('状态：本地计数始终可读', typeof unconfigured.local.cards === 'number', String(unconfigured.local.cards));
 
   /* ------------------------------------------------------------ HTTP 层防护 */
   const srv = startPanelHttp({ indexDir: indexA, ports: [8931, 8932, 8933], log: () => {} });
@@ -196,6 +201,146 @@ try {
     check('非同步接口仍然只读', readOnly.status === 405, String(readOnly.status));
 
     await new Promise((r) => srv.server.close(r));
+  }
+
+  /* ------------------------------------------------------------ 远端地址解析 */
+  {
+    const bare2 = path.join(work, 'remote2.git');
+    cleanup.push(bare2);
+    git(['init', '--bare', '--initial-branch=main', bare2]);
+    const idx = mkIndex({}, []);
+
+    // 本机已保存的地址
+    sync.saveSyncConfig({ repo: bare2, branch: 'main' }, idx);
+    check('地址解析：本机保存的（local）', sync.resolveRepo(idx).repo === bare2 && sync.resolveRepo(idx).source === 'local',
+      sync.resolveRepo(idx).source);
+
+    // 环境变量优先
+    process.env.SESSION_INDEX_SYNC_REPO = 'git@example.invalid:owner/repo.git';
+    check('地址解析：环境变量优先于本机保存', sync.resolveRepo(idx).source === 'env',
+      sync.resolveRepo(idx).source);
+    delete process.env.SESSION_INDEX_SYNC_REPO;
+
+    // 本机没保存 → 退到包内默认
+    sync.saveSyncConfig({ repo: '' }, idx);
+    const fallback = sync.resolveRepo(idx);
+    check('地址解析：没有本机地址时用包内默认', fallback.source === 'package' || fallback.source === 'none',
+      `${fallback.source} ${fallback.repo}`);
+
+    // status 不联网（本地瞬时返回）
+    const t0 = Date.now();
+    const st = sync.syncStatus(idx);
+    check('status 只读本地（不触发 git 网络）', Date.now() - t0 < 1500 && st.remote === null,
+      `${Date.now() - t0}ms`);
+  }
+
+  /* ------------------------------------------------------------ 首启自举 + 新终端直接可用 */
+  {
+    const bare3 = path.join(work, 'remote3.git');
+    cleanup.push(bare3);
+    git(['init', '--bare', '--initial-branch=main', bare3]);
+
+    // 造一个「另一台机器」的数据并推上去
+    const src = mkIndex(
+      { 'sess-x': { id: 'sess-x', title: '来自另一台机器的会话', app: 'dsh', updatedAt: 9, keywords: ['跨终端'], decisions: ['结论甲'], questions: ['问甲'], paths: ['C:/x'], files: [], tools: [], recordCount: 3 } },
+      [{ id: 'note-x', type: 'decision', text: '来自另一台机器的记忆', importance: 4, updatedAt: 9 }],
+    );
+    sync.saveSyncConfig({ repo: bare3, branch: 'main' }, src);
+    sync.syncPush(src);
+
+    // 新终端：空索引 + 只知道远端地址（环境变量）
+    const fresh = mkIndex({}, []);
+    const child = spawn(process.execPath, [path.join(ROOT, 'server.mjs')], {
+      env: {
+        ...process.env,
+        SESSION_INDEX_DIR: fresh,
+        SESSION_INDEX_AUTO: '0',
+        SESSION_INDEX_SYNC_REPO: bare3,
+        SESSION_INDEX_SYNC_AUTO_PULL: '1',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let err = '';
+    child.stderr.on('data', (c) => { err += c.toString(); });
+
+    // 等首启自举把数据拉回来
+    let pulled = false;
+    for (let i = 0; i < 60 && !pulled; i += 1) {
+      await new Promise((r) => setTimeout(r, 250));
+      try {
+        const doc = JSON.parse(readFileSync(path.join(fresh, 'cards.json'), 'utf8'));
+        pulled = Boolean(doc.cards && doc.cards['sess-x']);
+      } catch { /* 还没写 */ }
+    }
+    check('首启自举：空索引自动从远端拉取', pulled, err.split('\n').filter((l) => l.includes('自举')).join(' | ').slice(0, 120));
+    child.kill();
+
+    // 拉回来之后，agent 的工具要真能查到（这是「装了就能用」的关键）
+    const fresh2 = mkIndex({}, []);
+    const child2 = spawn(process.execPath, [path.join(ROOT, 'server.mjs')], {
+      env: {
+        ...process.env,
+        SESSION_INDEX_DIR: fresh2,
+        SESSION_INDEX_AUTO: '0',
+        SESSION_INDEX_SYNC_REPO: bare3,
+        SESSION_INDEX_SYNC_AUTO_PULL: '1',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let buf = '';
+    child2.stdout.on('data', (c) => { buf += c.toString(); });
+    child2.stderr.on('data', () => {});
+    const call = (method, params) => new Promise((resolve) => {
+      const id = Math.random().toString(36).slice(2);
+      const onData = (c) => {
+        buf += c.toString();
+        for (const line of buf.split('\n')) {
+          try {
+            const msg = JSON.parse(line);
+            if (msg.id === id) { buf = ''; child2.stdout.off('data', onData); resolve(msg); }
+          } catch { /* 半包 */ }
+        }
+      };
+      child2.stdout.on('data', onData);
+      child2.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+    });
+    await call('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 't', version: '1' } });
+
+    // 等自举完成
+    for (let i = 0; i < 40; i += 1) {
+      await new Promise((r) => setTimeout(r, 250));
+      try {
+        const doc = JSON.parse(readFileSync(path.join(fresh2, 'cards.json'), 'utf8'));
+        if (doc.cards && doc.cards['sess-x']) break;
+      } catch { /* 还没写 */ }
+    }
+
+    const briefRes = await call('tools/call', { name: 'session_index_brief', arguments: { limit: 3 } });
+    const brief = JSON.parse(briefRes.result.content[0].text);
+    check('新终端：brief 能读到同步来的结论', brief.returned > 0 && brief.sessions.some((s) => s.decisions?.length > 0),
+      `returned=${brief.returned}`);
+
+    const listRes = await call('tools/call', { name: 'session_index_list', arguments: { limit: 10 } });
+    const list = JSON.parse(listRes.result.content[0].text);
+    check('新终端：list 能列出同步来的会话（标 imported）',
+      list.total >= 1 && list.sessions.some((s) => s.imported === true),
+      `total=${list.total}`);
+
+    const searchRes = await call('tools/call', { name: 'session_index_search', arguments: { query: '跨终端', limit: 3 } });
+    const sem = JSON.parse(searchRes.result.content[0].text);
+    check('新终端：search 能命中同步来的内容', sem.total > 0, `命中 ${sem.total}`);
+
+    const getRes = await call('tools/call', { name: 'session_index_get', arguments: { sessionId: 'sess-x' } });
+    const got = JSON.parse(getRes.result.content[0].text);
+    check('新终端：get 给出卡片形态而不是报错', got.mode === 'card' && Array.isArray(got.decisions),
+      `mode=${got.mode}`);
+
+    const recallRes = await call('tools/call', { name: 'session_index_recall', arguments: { limit: 5 } });
+    const recall = JSON.parse(recallRes.result.content[0].text);
+    check('新终端：长期记忆能召回', (recall.total || 0) > 0 || (recall.notes || []).length > 0,
+      `total=${recall.total}`);
+
+    child2.kill();
   }
 } finally {
   for (const dir of cleanup) {

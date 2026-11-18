@@ -5,7 +5,8 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.8.1** |
+| 版本 | **v2.9.0** | **另一台终端「装了就能用」**：工具不再把同步来的会话当空气 —— 守卫从「只看 meta」改成「meta 或会话卡」，`list` 补上同步来的会话（标 `imported`），`get` 在本机没原文时返回会话卡形态（结论/提问/路径，不是报错），`search` 把会话卡纳入精确与语义召回，`recall` 照常召回同步来的记忆。远端地址三级解析（环境变量 → 本机已保存 → 包内 `sync.default.json`）+ **首启自举**（本地一张卡都没有时自动拉一次），新机器不用手填地址。`sync_status` 改为只读本地，远端探测拆到 `sync_probe`（面板不再每次打开都打 git 网络）。`test-sync` 40 → 51。 |
+| **v2.8.1** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
 | MCP 能力 | **14 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
@@ -201,7 +202,7 @@ HTTP 通道把这三层依赖全部去掉，而且**和 agent 用的是同一份
 ### 手工验证（不用开面板）
 
 ```bash
-curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"2.8.1"}
+curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"2.9.0"}
 curl "http://127.0.0.1:8799/api/list?limit=3"
 curl "http://127.0.0.1:8799/api/search?q=%E6%8F%92%E4%BB%B6"
 curl "http://127.0.0.1:8799/api/card?id=<会话id>"
@@ -234,12 +235,34 @@ curl "http://127.0.0.1:8799/api/card?id=<会话id>"
 ### 面板四步
 
 1. 面板 meta 行右侧点 **「同步」**；
-2. 填一个 **Private** 仓地址（建议 `git@github.com:你/dsh-session-index-data.git`）→ **保存地址**；
-3. **上传到远端**（本机 → 仓）；另一台机器上装好插件、填同一地址 → **从远端合并**；
-4. 面板顶部会出现「远端有新数据（N 张会话卡）」横幅，点一下即合并 —— 这就是「装上后自动获取」。
+2. 远端地址**通常不用填** —— 它按「环境变量 → 本机已保存 → 包内默认」三级解析
+   （包内 `sync.default.json` 带着默认仓地址，所以新机器装上就知道跟谁同步）；
+   要换成别的仓再填 → **保存地址**；
+3. **上传到远端**（本机 → 仓）；
+4. 另一台机器装好插件 → 它会**首启自动拉一次**（本地一张会话卡都没有时才拉，不会覆盖本机数据），
+   面板顶部也会出现「远端有新数据（N 张会话卡）」横幅，点一下即合并。
+
+不想让地址随包公开就删掉包里的 `sync.default.json`（会退回面板里手填）；
+某台机器明确不接默认地址：设 `SESSION_INDEX_SYNC_NO_DEFAULT=1`。
 
 也可以不走 git：**导出 zip** 生成 `~/.dsh/session-index/exports/session-index-data-<时间>.zip`，
 拷到另一台机器用「导入合并」打开（同样是合并，不会覆盖那边的新数据）。
+
+### 另一台终端拉取之后，agent 怎么用
+
+同步过来的是**会话卡 + 长期记忆**（不含会话原文），工具侧已经适配：
+
+| 工具 | 同步来的会话怎么表现 |
+|---|---|
+| `session_index_brief` | 正常返回这些会话的**结论 / 提问 / 关键词** ✔ |
+| `session_index_search` | 会话卡也进召回集（标题+提问+结论+关键词），**同步来的内容搜得到** ✔ |
+| `session_index_list` | 会列出它们，并标 `imported: true`（本机没有原文） ✔ |
+| `session_index_get` | 本机没原文时返回 `mode: "card"`：结论 / 提问 / 涉及路径 / 关键词（不是报错） ✔ |
+| `session_index_recall` | 同步来的**长期记忆**照常召回 ✔ |
+| `session_index_get` 取原文 | ✘ 原文不同步 —— 要看原文得去产生它的那台机器 |
+
+> 一句话：**另一台终端装上插件、拉完数据，agent 立刻就能用上这边的历史结论与记忆**；
+> 只有「逐句原文」这一层拿不到 —— 那是刻意不传的（几十 MB 且含隐私）。
 
 ### 同步范围与合并语义
 
@@ -406,8 +429,8 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 npm registry 来源**（2026-11-18 v2.8.1 发布后切回）：profile 依赖是
-`"dsh-session-index-lau": "^2.8.1"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
+**本机当前是 npm registry 来源**（2026-11-18 v2.9.0 发布后切回）：profile 依赖是
+`"dsh-session-index-lau": "^2.9.0"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
 以后发新版后**点更新即可，不需要卸载重装**；命令行 `pnpm update dsh-session-index-lau` 与点按钮同一条路。
 
 > ⚠ 切回 npm 后，改本机代码**不再即时生效**：要走「改仓库 → 发布 npm → 插件页更新 →
@@ -466,8 +489,8 @@ node smoke.mjs                   # 端到端自测（含标准形态断言）
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.8.1.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
-| `dist/session-index-skill-v2.8.1.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.9.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
+| `dist/session-index-skill-v2.9.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可调 MCP 工具 `session_index_package` 触发打包。

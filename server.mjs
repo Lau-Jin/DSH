@@ -29,7 +29,7 @@ import { pack, packAll, listPacks } from './lib/pack.mjs';
 import { stageConfig, buildStageDocument, stageToken, bridgeOverview, findDuplicate, postStage, StageError } from './lib/stage.mjs';
 
 const { sessionsRoot, indexDir, workbuddyProjectsDir } = defaultPaths();
-const VERSION = '2.8.1';
+const VERSION = '2.9.0';
 const SUPPORTED_PROTOCOLS = new Set(['2024-11-05', '2025-03-26', '2025-06-18']);
 const log = (...parts) => process.stderr.write(`[dsh-session-index] ${parts.join(' ')}\n`);
 
@@ -176,11 +176,34 @@ function toolList(args = {}) {
   const until = Number(args.until) || Number.MAX_SAFE_INTEGER;
   const limit = clamp(args.limit, 1, 50, 20);
   const offset = clamp(args.offset, 0, 100000, 0);
-  let rows = filterByApp(Object.values(meta.sessions), args.app).filter((s) => {
+  const inRange = (s) => {
     if (workspace && !String(s.workspace || '').toLowerCase().includes(workspace)) return false;
     const t = s.updatedAt || 0;
     return t >= since && t <= until;
-  });
+  };
+  let rows = filterByApp(Object.values(meta.sessions), args.app).filter(inRange);
+
+  // 补上「只有会话卡、本机没有对应会话文件」的 —— 那是**从别的机器同步过来**的，
+  // 只落在 cards.json 里，meta 里没有，不补的话 list 看不见它们。
+  const cards = freshCards().cards || {};
+  const localIds = new Set(Object.keys(meta.sessions));
+  for (const card of Object.values(cards)) {
+    if (!card || localIds.has(card.id)) continue;
+    if (args.app && args.app !== 'all' && appOf(card) !== args.app) continue;
+    if (!inRange(card)) continue;
+    rows.push({
+      id: card.id,
+      app: appOf(card),
+      title: card.title || '',
+      workspace: card.workspace || '',
+      createdAt: card.createdAt || 0,
+      updatedAt: card.updatedAt || 0,
+      records: card.recordCount || 0,
+      sourceBytes: 0,
+      imported: true,
+    });
+  }
+
   rows.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   const total = rows.length;
   rows = rows.slice(offset, offset + limit);
@@ -192,8 +215,11 @@ function toolList(args = {}) {
       id: s.id, app: appOf(s), title: s.title, workspace: s.workspace,
       createdAt: s.createdAt, updatedAt: s.updatedAt, records: s.records,
       sourceBytes: s.sourceBytes, parentSession: s.parentSession || undefined,
+      // imported=true = 这条是同步来的，本机没有原文（get 只能看会话卡）
+      imported: s.imported ? true : undefined,
     })),
-    hint: '用 session_index_get 看骨架、session_index_related 找关联；app 可填 dsh / workbuddy / all',
+    hint: '用 session_index_get 看骨架、session_index_related 找关联；app 可填 dsh / workbuddy / all。'
+      + '标了 imported 的是从别的机器同步来的会话卡，本机没有原文。',
   };
 }
 
@@ -311,11 +337,17 @@ function noteDocs() {
     ts: n.updatedAt, i: -1, text: `${n.text} ${(n.tags || []).join(' ')}`,
   }));
 }
-function cardDocs(doc, app) {
-  return Object.values(doc.cards || {}).filter((c) => matchApp(appOf(c), app)).map((c) => ({
-    kind: 'card', sessionId: c.id, app: appOf(c), title: c.title, role: 'card', t: 'card',
-    ts: c.updatedAt, i: -1, text: [c.title, ...(c.questions || []), ...(c.decisions || [])].join('\n'),
-  }));
+function cardDocs(doc, app, filter) {
+  return Object.values(doc.cards || {})
+    .filter((c) => matchApp(appOf(c), app))
+    .filter((c) => (typeof filter === 'function' ? filter(c) : true))
+    .map((c) => ({
+      kind: 'card', sessionId: c.id, app: appOf(c), title: c.title, role: 'card', t: 'card',
+      ts: c.updatedAt, i: -1,
+      // 关键词也进正文：会话卡是**同步来的会话**在本机唯一可搜的文本，
+      // 只放标题+提问+结论会漏掉「按关键词找那次会话」这种用法。
+      text: [c.title, ...(c.questions || []), ...(c.decisions || []), ...(c.keywords || [])].join('\n'),
+    }));
 }
 function toSearchResult(row, eq, contextChars) {
   const it = row.item;
@@ -355,7 +387,17 @@ async function toolSearch(args = {}) {
     if (sessionFilter && !s.id.toLowerCase().includes(sessionFilter)) return false;
     return (s.updatedAt || 0) >= since && (s.updatedAt || 0) <= until;
   });
-  if (candidates.length === 0) fail('没有符合过滤条件的会话，先用 session_index_list 看看');
+  // 会话卡也要过同样的过滤：从别的机器同步来的会话**本机没有记录文件**，
+  // 只在 cards.json 里；不把它们算进候选，那台机器上就搜不到任何东西。
+  const cardFilter = (c) => {
+    if (workspace && !String(c.workspace || '').toLowerCase().includes(workspace)) return false;
+    if (sessionFilter && !String(c.id || '').toLowerCase().includes(sessionFilter)) return false;
+    return (c.updatedAt || 0) >= since && (c.updatedAt || 0) <= until;
+  };
+  const cardCandidates = cardDocs(cardsDoc, app, cardFilter);
+  if (candidates.length === 0 && cardCandidates.length === 0) {
+    fail('没有符合过滤条件的会话，先用 session_index_list 看看');
+  }
   const docs = [];
   for (const s of candidates) {
     for (const r of getRecords(s)) {
@@ -372,13 +414,15 @@ async function toolSearch(args = {}) {
   }
   let ranked;
   if (mode === 'keyword') {
-    ranked = docs.map((it) => ({
+    // 精确匹配也要算上会话卡：同步来的会话只有卡，没有本机记录
+    const keywordDocs = [...docs, ...cardCandidates];
+    ranked = keywordDocs.map((it) => ({
       item: it,
-      score: eq.terms.reduce((n, t) => n + (it.text.toLowerCase().split(t).length - 1), 0),
+      score: eq.terms.reduce((n, t) => n + (String(it.text || '').toLowerCase().split(t).length - 1), 0),
       matched: eq.terms,
     })).sort((a, b) => b.score - a.score || b.item.ts - a.item.ts);
   } else {
-    ranked = rankCandidates([...docs, ...noteDocs(), ...cardDocs(cardsDoc, app)], eq);
+    ranked = rankCandidates([...docs, ...noteDocs(), ...cardCandidates], eq);
   }
   const cfg = embeddingConfig();
   let vectorInfo = null;
@@ -417,7 +461,36 @@ async function toolSearch(args = {}) {
 
 function toolGet(args = {}) {
   const meta = freshMeta();
-  const s = resolveSession(meta, args.sessionId);
+  let s = null;
+  try {
+    s = resolveSession(meta, args.sessionId);
+  } catch (err) {
+    // 本机没有这个会话的记录 —— 多半是**从别的机器同步来的会话卡**。
+    // 那就用会话卡作答（结论 / 提问 / 涉及路径 / 关键词），而不是一句「会话不存在」。
+    const cardsDoc = freshCards();
+    let cardId = null;
+    try {
+      cardId = resolveCardId(cardsDoc, String(args.sessionId || ''));
+    } catch {
+      cardId = null;
+    }
+    const card = cardId ? cardsDoc.cards[cardId] : null;
+    if (!card) throw err;
+    return {
+      mode: 'card', sessionId: card.id, app: appOf(card), title: card.title || '',
+      imported: true,
+      totalRecords: card.recordCount || 0,
+      decisions: card.decisions || [],
+      questions: card.questions || [],
+      paths: card.paths || [],
+      files: card.files || [],
+      tools: card.tools || [],
+      keywords: card.keywords || [],
+      digest: card.digest || '',
+      hint: '这台机器上没有该会话的原文（数据来自其它机器同步的会话卡），'
+        + '所以只能给出会话卡里的结论 / 提问 / 涉及路径；要看原文请到产生它的那台机器上查。',
+    };
+  }
   const records = getRecords(s);
   const maxChars = clamp(args.maxChars, 200, 30000, 6000);
   const seqs = Array.isArray(args.seqs) ? args.seqs.map(Number).filter(Number.isFinite) : [];
@@ -889,10 +962,19 @@ async function handle(req) {
           // 检查失败不影响主流程
         }
         try {
-          if (Object.keys(freshMeta().sessions || {}).length === 0) {
+          // 「有没有可用数据」要看**会话卡**而不只是 meta：
+          // 另一台机器同步过来的会话卡只落在 cards.json 里，本机可能一个本地会话都还没有
+          // （刚装完插件还没开过会话）。那时若只看 meta，会把所有工具都挡在
+          // 「索引正在后台自动构建」后面 —— 拉来的数据等于白拉。
+          const hasData = () => {
+            try { if (Object.keys(freshMeta().sessions || {}).length > 0) return true; } catch { /* ignore */ }
+            try { if (Object.keys(freshCards().cards || {}).length > 0) return true; } catch { /* ignore */ }
+            return false;
+          };
+          if (!hasData()) {
             // 首次启动后台构建可能刚好还没落盘，给一个短窗口再判定，避免误报
             await new Promise((r) => setTimeout(r, 800));
-            if (Object.keys(freshMeta().sessions || {}).length === 0) {
+            if (!hasData()) {
               ok(id, {
                 content: [{ type: 'text', text: JSON.stringify({ error: '索引正在后台自动构建，请稍候几秒再试', autoIndex: auto.snapshot() }) }],
                 isError: true,
@@ -966,6 +1048,30 @@ process.stdin.on('end', () => {
   process.exit(0);
 });
 auto.start();
+
+/**
+ * 首启自举：本地**一张会话卡都没有**、而远端是已知的时候，后台拉一次。
+ *
+ * 这解决的是「另一台终端装上插件就能直接用」：
+ * 远端地址来自环境变量 / 包内默认 / 本机已保存（见 lib/sync.mjs 的 resolveRepo），
+ * 所以新机器不用再手填地址；本地本来就没数据，拉取也不存在覆盖风险。
+ * 用 SESSION_INDEX_SYNC_AUTO_PULL=0 可关掉。
+ */
+if (process.env.SESSION_INDEX_SYNC_AUTO_PULL !== '0') {
+  void (async () => {
+    try {
+      const { syncStatus, syncPull } = await import('./lib/sync.mjs');
+      const st = syncStatus(indexDir);
+      if (!st.configured || st.local.cards > 0) return;
+      log(`首启自举：本地还没有会话卡，正在从远端拉取（${st.repoSource}）…`);
+      const r = syncPull(indexDir);
+      log(`首启自举完成：拉回 ${r.cards} 张会话卡 / ${r.notes} 条记忆`);
+      notifyIndexUpdated({ rebuilt: 0 });
+    } catch (err) {
+      log('首启自举未完成（不影响其它功能）：' + ((err && err.message) || err));
+    }
+  })();
+}
 
 // 面板 HTTP 通道：侧栏「会话检索」面板直连本机读取索引。
 // 它和 MCP 工具共用 lib/panel-api.mjs，所以面板看到的排序与 agent 搜到的完全一致。

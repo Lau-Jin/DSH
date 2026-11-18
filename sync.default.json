@@ -1,0 +1,6 @@
+{
+  "_说明": "随包分发的默认同步远端：新终端装上插件就知道该跟哪个仓同步，不用每台机器手填地址。",
+  "_隐私": "这个地址会随 npm 包公开（仓库本身是 Private，访问仍需本机 SSH key）。不想公开就删掉本文件，退回面板里手填。",
+  "repo": "git@github.com:Lau-Jin/dsh-session-index-data.git",
+  "branch": "main"
+}
