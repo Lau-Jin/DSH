@@ -1,5 +1,5 @@
 /**
- * 会话检索面板（dsh-session-index v2.9.0）单测。
+ * 会话检索面板（dsh-session-index v2.9.1）单测。
  *
  * 两半各测：
  *   1. 宿主半身 `lib/index.mjs`：路径记录仍在 + 新增的 `session-index` 命令
@@ -355,7 +355,8 @@ const { runQuery: sharedQuery } = await import(pathToFileURL(path.join(ROOT, 'li
   check('http: card 取到全文（含 decisions）', card.ok === true && Array.isArray(card.card.decisions));
   check('http: 未知路由给 404', handleRequest(INDEX_DIR, u('/nope')).code === 404);
 
-  // 跨源策略：会话卡是会话元数据，远程网页不许读；本地源（渲染进程）放行。
+  // 跨源策略：会话卡是会话元数据，公网站点与局域网默认都不许读；
+  // 本机（回环 / 本机名 / .localhost 之类）与自定义 scheme 放行。
   check('cors: 无 Origin 放行（curl）', allowedOrigin(undefined) === '*');
   check('cors: null 源放行（file:// 沙箱）', allowedOrigin('null') === '*');
   check('cors: 远程站点被拒', allowedOrigin('https://evil.example.com') === null
@@ -363,6 +364,7 @@ const { runQuery: sharedQuery } = await import(pathToFileURL(path.join(ROOT, 'li
   check('cors: 回环源放行', allowedOrigin('http://127.0.0.1:8799') === 'http://127.0.0.1:8799'
     && allowedOrigin('http://localhost:8799') === 'http://localhost:8799');
   check('cors: 非 http 源（app:// 等）放行', allowedOrigin('app://dsh.desktop') === 'app://dsh.desktop'
+    && allowedOrigin('dsh-app://host') === 'dsh-app://host'
     && allowedOrigin('file://') === 'file://');
 
   // 口径一致：HTTP 通道与斜杠命令/宿主半身走同一套实现，结果必须逐条相同。
@@ -414,6 +416,26 @@ const { runQuery: sharedQuery } = await import(pathToFileURL(path.join(ROOT, 'li
     const noOrigin = await fetch(base + '/api/health');
     check('http 无 Origin 时给 *', noOrigin.headers.get('access-control-allow-origin') === '*',
       String(noOrigin.headers.get('access-control-allow-origin')));
+
+    // 面板自诊断端点：任何源都能写（简单请求，不预检），
+    // 这样即使数据请求被 CORS 挡住，面板也能把失败原因报回宿主机。
+    const diag = await fetch(base + '/api/diag', {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ where: 'test' }),
+    });
+    check('面板自诊断端点接受任意源', diag.status === 204, String(diag.status));
+
+    // 访问日志：面板空白时靠它看「到底请求了什么、Origin 是什么、拿到什么状态码」
+    // （读的就是这个测试服务器自己的索引目录 —— 日志写在服务端的 indexDir 里）
+    const logDir = INDEX_DIR;
+    const accessFile = path.join(logDir, 'http-access.log');
+    const diagFile = path.join(logDir, 'client-diagnostics.log');
+    let accessText = '';
+    let diagText = '';
+    try { accessText = existsSync(accessFile) ? readFileSync(accessFile, 'utf8') : ''; } catch { /* 忽略 */ }
+    try { diagText = existsSync(diagFile) ? readFileSync(diagFile, 'utf8') : ''; } catch { /* 忽略 */ }
+    check('访问日志记录了请求与 Origin', accessText.includes('/api/list') && accessText.includes('origin='),
+      `${accessText.split('\n').filter(Boolean).length} 行`);
+    check('诊断日志记录了面板自报', diagText.includes('where'), diagText.split('\n').filter(Boolean).slice(-1)[0] || '(空)');
 
     await new Promise((r) => srv.server.close(r));
   }

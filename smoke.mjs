@@ -350,7 +350,8 @@ try {
 
   check('server.mjs 挂载面板 HTTP 通道（可配端口）', svSrc.includes('startPanelHttp') && svSrc.includes('SESSION_INDEX_HTTP_PORT'), '');
   check('HTTP 通道只绑回环、只读', httpSrc.includes("options.host || '127.0.0.1'") && httpSrc.includes('只接受 GET'), '');
-  check('HTTP 通道按源判定 CORS（远程源不放行）', httpSrc.includes('export function allowedOrigin') && httpSrc.includes("parsed.protocol === 'https:'"), '');
+  check('HTTP 通道按源判定 CORS（远程源不放行）', httpSrc.includes('export function allowedOrigin') && httpSrc.includes('isLocalHost(parsed.hostname)'), '');
+  check('HTTP 通道有访问日志与面板自诊断', httpSrc.includes('http-access.log') && httpSrc.includes('client-diagnostics.log'), '');
   check('面板优先走 HTTP 通道', clientSrc.includes('probeHttpBase') && clientSrc.includes('/api/list'), '');
   check('宿主半身与面板共用 panel-api（口径一致）', hostSrc.includes("from './panel-api.mjs'") && panelSrc.includes("from './cards.mjs'"), '');
 
