@@ -6,7 +6,7 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 
 # 跨会话历史接入
 
-你有 `session_index_*` 系列 MCP 工具（共 **13 个**）。所有历史会话已预先建好索引，源会话文件是分帧 zstd 压缩，**不要直接去读 `~/.dsh/sessions` 下的 `.zstd` 文件**——那会重复消耗大量时间和 token。
+你有 `session_index_*` 系列 MCP 工具（共 **14 个**）。所有历史会话已预先建好索引，源会话文件是分帧 zstd 压缩，**不要直接去读 `~/.dsh/sessions` 下的 `.zstd` 文件**——那会重复消耗大量时间和 token。
 
 索引覆盖 DSH 与 WorkBuddy 两个应用的会话，`session_index_*` 的 `app` 参数可过滤 `dsh` / `workbuddy` / `all`。
 
@@ -33,6 +33,7 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 | 手动触发增量刷新 | `session_index_refresh` |
 | 重新生成分发包 | `session_index_package` |
 | 管理可选向量索引 | `session_index_vectors` |
+| 把会话整理成文档投到思源桥「待入库」 | `session_index_stage`（两步确认：先预览拿 `confirmWith`，回传才投递；**绝不自动写笔记库**） |
 
 ## 铁律
 
@@ -44,6 +45,17 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 
 ## 安装
 
-从仓库拉取后运行 `node install.mjs`（Windows 可双击 `install.cmd`）会自动把本 Skill 装到 `%USERPROFILE%\.dsh\skills\session-index\SKILL.md`，同时注册 `session-index` MCP server。
+**不需要手工跑安装脚本**（`install.mjs` / `install.cmd` 已在 v2.5.3 移除，仓库里没有这些文件）。
 
-也可单独导入：在 DSH「MCP 与技能」→ Skills 里导入 `skill/` 目录，或复制本文件到上述路径；前提是已启用 `session-index` MCP server，否则没有对应工具。
+1. DSH → **插件页** → 粘贴仓库地址 `https://github.com/Lau-Jin/DSH` → 安装 → **完全退出 DSH 再打开**（最小化不算）。
+   或命令行：`cd ~/.dsh/profiles/desktop && pnpm add dsh-session-index-lau`。
+2. 装完自动发生三件事：包内 `cordis.patch.yml` 挂上 MCP stdio 客户端（本 Skill 的 14 个工具即可用）、
+   宿主半身把 `server.mjs` 路径写进 `server-path.txt`、本文件被自动装到 `%USERPROFILE%\.dsh/skills\session-index\SKILL.md`。
+3. 前置：Node ≥ 22.15（需要 `zlib.zstdDecompressSync`；插件页安装会自动挑 DSH 自带的 Node）。
+
+如果工具不存在，按顺序查：「MCP 与技能」里 `session-index` 服务是否启用 → 是否重启过 DSH →
+`~/.dsh/session-index/host-half.log` 有没有 `apply` 记录。技能文件本身也可手工复制到上述路径。
+
+装上之后还有两个给人用的入口：侧栏「会话检索」面板（走 MCP 服务进程开的本地只读 HTTP
+`127.0.0.1:8799`），以及聊天里的斜杠命令 `/session-index list|search|card|status`——
+与本 Skill 的工具共用同一套查询实现，口径一致。

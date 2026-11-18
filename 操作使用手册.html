@@ -522,6 +522,9 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     ├── index-store.mjs     各类 JSON 文档与分片读写
     └── stage.mjs            会话整理文档渲染 + 思源桥待入库投递</code></pre>
   <h3>验证记录（2026-11-13 ~ 14）</h3>
+  <p class="note">下表是当期验证记录。<b>其中涉及 <code>install.mjs</code> / <code>--doctor</code> 的三行已随 v2.5.3
+  移除安装体系而失效</b>（仓库里已无这些文件）；现行安装方式只有「插件页粘贴仓库地址」与
+  <code>pnpm add dsh-session-index-lau</code>，装完自动挂 bundle patch、自动装技能，无需任何脚本。</p>
   <table>
     <tr><th>项</th><th>结果</th></tr>
     <tr><td>bundle patch 语法与求值</td><td>用 DSH 自带的 js-yaml 复刻 <code>!!js</code> 标量 + cordis 的 <code>with (ctx) { eval(expr) }</code> 求值链：YAML 解析通过、2 个 insert 条目正确、<code>command</code> 解析到 DSH 自带 node（v24.21.0，含 zstd）</td></tr>
