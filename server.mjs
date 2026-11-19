@@ -29,7 +29,7 @@ import { pack, packAll, listPacks } from './lib/pack.mjs';
 import { stageConfig, buildStageDocument, stageToken, bridgeOverview, findDuplicate, postStage, StageError } from './lib/stage.mjs';
 
 const { sessionsRoot, indexDir, workbuddyProjectsDir } = defaultPaths();
-const VERSION = '2.9.1';
+const VERSION = '2.9.2';
 const SUPPORTED_PROTOCOLS = new Set(['2024-11-05', '2025-03-26', '2025-06-18']);
 const log = (...parts) => process.stderr.write(`[dsh-session-index] ${parts.join(' ')}\n`);
 
@@ -1064,7 +1064,7 @@ if (process.env.SESSION_INDEX_SYNC_AUTO_PULL !== '0') {
       const st = syncStatus(indexDir);
       if (!st.configured || st.local.cards > 0) return;
       log(`首启自举：本地还没有会话卡，正在从远端拉取（${st.repoSource}）…`);
-      const r = syncPull(indexDir);
+      const r = await syncPull(indexDir);
       log(`首启自举完成：拉回 ${r.cards} 张会话卡 / ${r.notes} 条记忆`);
       notifyIndexUpdated({ rebuilt: 0 });
     } catch (err) {

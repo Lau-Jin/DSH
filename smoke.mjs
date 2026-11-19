@@ -365,6 +365,13 @@ try {
 
   // 跨终端同步（lib/sync.mjs + /api/sync/*）
   const syncSrc = readFileSync(path.join(here, 'lib', 'sync.mjs'), 'utf8');
+  // execFileSync 会阻塞事件循环：一次 git 网络调用能把 MCP 的 HTTP 通道和工具调用
+  // 一起冻住（实测 8.85 秒 → 面板探活超时 →「面板失效」）。sync.mjs 只允许
+  // gitAvailable 里留一处（本地快查、结果缓存），其余 git 一律异步 execFile。
+  const execSyncUses = (syncSrc.match(/execFileSync\(/g) || []).length;
+  check('git 全部异步（execFileSync 只剩缓存的 gitAvailable）',
+    syncSrc.includes('async function git(') && execSyncUses === 1 && syncSrc.includes('gitAvailableCache'),
+    `execFileSync ${execSyncUses} 处`);
   check('同步：合并而不是覆盖', syncSrc.includes('export function mergeCards') && syncSrc.includes('export function mergeNotes'), '');
   check('同步：git 不交互（不挂起 MCP 进程）', syncSrc.includes('GIT_TERMINAL_PROMPT') && syncSrc.includes('BatchMode=yes'), '');
   check('同步：远端文件规范化（防两台机器互推时间戳）',

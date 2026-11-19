@@ -96,7 +96,7 @@ try {
 
   /* ------------------------------------------------------------ A 推 */
   sync.saveSyncConfig({ repo: bare, branch: 'main' }, indexA);
-  const pushA = sync.syncPush(indexA);
+  const pushA = await sync.syncPush(indexA);
   check('A 首次推送成功', pushA.ok && pushA.changed === true, `commit=${pushA.commit}`);
   check('A 推送内容计数', pushA.cards === 2 && pushA.notes === 1, `cards=${pushA.cards} notes=${pushA.notes}`);
   const remoteCards = JSON.parse(git(['show', 'main:cards.json'], bare));
@@ -106,7 +106,7 @@ try {
 
   /* ------------------------------------------------------------ B 拉 */
   sync.saveSyncConfig({ repo: bare, branch: 'main' }, indexB);
-  const pullB = sync.syncPull(indexB);
+  const pullB = await sync.syncPull(indexB);
   check('B 拉取成功', pullB.ok, `added=${pullB.added}`);
   check('B 拿到了 A 的会话卡', pullB.added === 1, `added=${pullB.added}`);
   const bCards = JSON.parse(readFileSync(path.join(indexB, 'cards.json'), 'utf8'));
@@ -120,17 +120,17 @@ try {
   bCards.cards['sess-b2'] = card('sess-b2', 700, 'B 的新会话');
   bCards.cards['sess-shared'].title = '共享（B 更新）';
   writeFileSync(path.join(indexB, 'cards.json'), JSON.stringify(bCards));
-  const pushB = sync.syncPush(indexB);
+  const pushB = await sync.syncPush(indexB);
   check('B 推送成功', pushB.ok && pushB.changed, `commit=${pushB.commit}`);
 
-  const pullA = sync.syncPull(indexA);
+  const pullA = await sync.syncPull(indexA);
   const aCards = JSON.parse(readFileSync(path.join(indexA, 'cards.json'), 'utf8'));
   check('A 拉回了 B 的新会话', Boolean(aCards.cards['sess-b2']));
   check('A 的会话卡没被覆盖丢失', Boolean(aCards.cards['sess-a1']));
   check('A 的共享卡更新为最新', aCards.cards['sess-shared'].title === '共享（B 更新）', aCards.cards['sess-shared'].title);
   check('A 拉取报告了新增数', pullA.added >= 1, `added=${pullA.added}`);
 
-  const again = sync.syncPush(indexA);
+  const again = await sync.syncPush(indexA);
   check('重复推送是幂等的（无变化）', again.ok && again.changed === false, `changed=${again.changed}`);
 
   /* ------------------------------------------------------------ 导出 / 导入 */
@@ -203,6 +203,52 @@ try {
     await new Promise((r) => srv.server.close(r));
   }
 
+  /* ------------------------------------------------- git 不许阻塞事件循环（回归）
+   * 这条测试复现的是真实故障：sync.mjs 曾用 execFileSync 跑 git，
+   * 一次网络调用就把 MCP 进程的 HTTP 通道冻了 8.85 秒 → 面板探活 900ms 超时 →
+   * 「面板失效、一片空白」。现在 git 走异步 execFile，慢远端在后台跑，
+   * 期间面板的 HTTP 必须照常秒回。
+   */
+  {
+    const { createServer } = await import('node:http');
+    // 一个「故意慢 1.5 秒」的假 git 远端
+    const slow = createServer((req, res) => {
+      setTimeout(() => {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('not a git repo');
+      }, 1500);
+    });
+    await new Promise((r) => slow.listen(0, '127.0.0.1', r));
+    const slowPort = slow.address().port;
+
+    const idx = mkIndex({}, []);
+    sync.saveSyncConfig({ repo: `http://127.0.0.1:${slowPort}/repo.git`, branch: 'main' }, idx);
+
+    const srv = startPanelHttp({ indexDir: idx, ports: [8941, 8942, 8943], log: () => {} });
+    for (let i = 0; i < 40 && !(srv && srv.server.listening); i += 1) await new Promise((r) => setTimeout(r, 25));
+    const addr = srv && srv.server.address();
+    const base = `http://127.0.0.1:${addr.port}`;
+
+    const started = Date.now();
+    const probeDone = { at: 0 };
+    // 后台发一次远端探测（它会去撞那个慢服务，耗时约 1.5 秒）
+    const probePromise = sync.syncProbe(idx).then((r) => { probeDone.at = Date.now() - started; return r; });
+
+    await new Promise((r) => setTimeout(r, 60));
+    const httpStart = Date.now();
+    const res = await fetch(base + '/api/health', { cache: 'no-store' });
+    const httpMs = Date.now() - httpStart;
+    const probeResult = await probePromise;
+
+    check('慢 git 远端在后台跑（探测确实变慢）', probeDone.at >= 1200, `探测耗时 ${probeDone.at}ms`);
+    check('探测期间面板 HTTP 照常秒回（事件循环没被卡）', res.ok && httpMs < 600, `HTTP 耗时 ${httpMs}ms`);
+    check('慢远端失败不影响其它功能', probeResult && probeResult.ok === false, String(probeResult && probeResult.error).slice(0, 60));
+
+    await new Promise((r) => srv.server.close(r));
+    await new Promise((r) => slow.close(r));
+  }
+
+
   /* ------------------------------------------------------------ 远端地址解析 */
   {
     const bare2 = path.join(work, 'remote2.git');
@@ -246,7 +292,7 @@ try {
       [{ id: 'note-x', type: 'decision', text: '来自另一台机器的记忆', importance: 4, updatedAt: 9 }],
     );
     sync.saveSyncConfig({ repo: bare3, branch: 'main' }, src);
-    sync.syncPush(src);
+    await sync.syncPush(src);
 
     // 新终端：空索引 + 只知道远端地址（环境变量）
     const fresh = mkIndex({}, []);
