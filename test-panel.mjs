@@ -1,5 +1,5 @@
 /**
- * 会话检索面板（dsh-session-index v2.9.2）单测。
+ * 会话检索面板（dsh-session-index v2.9.3）单测。
  *
  * 两半各测：
  *   1. 宿主半身 `lib/index.mjs`：路径记录仍在 + 新增的 `session-index` 命令
@@ -9,7 +9,7 @@
  *
  * 只读索引，不写任何东西；不碰真实 MCP。
  */
-import { readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, copyFileSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import os from 'node:os';
@@ -17,8 +17,27 @@ import os from 'node:os';
 const here = path.dirname(fileURLToPath(import.meta.url));
 // 本文件就放在包根目录（和 smoke.mjs 同级）
 const ROOT = here;
-const INDEX_DIR = process.env.SESSION_INDEX_DIR
+
+/**
+ * 测试全程隔离到**临时索引目录**。
+ *
+ * 宿主半身的 `apply()` 会写 `server-path.txt`（这是它的本职工作）—— 如果指向真实索引，
+ * 跑一次测试就会把**正在运行的 DSH 的 MCP 入口路径**改掉：门禁的
+ * 「server-path.txt 指向已装包」会因此 FAIL，MCP 还可能被指回源码目录。
+ * 所以把真实索引的卡文件拷进临时目录，测试只在这里读写。
+ */
+const REAL_INDEX = process.env.SESSION_INDEX_DIR
   || path.join(process.env.DSH_HOME || path.join(os.homedir(), '.dsh'), 'session-index');
+const INDEX_DIR = mkdtempSync(path.join(os.tmpdir(), 'si-panel-idx-'));
+// 必须在 import lib/index.mjs **之前**设好：宿主半身 apply() 内部用
+// resolveIndexDir()（读 SESSION_INDEX_DIR / DSH_HOME）决定写哪里。
+process.env.SESSION_INDEX_DIR = INDEX_DIR;
+for (const file of ['cards.json', 'notes.json']) {
+  try {
+    const from = path.join(REAL_INDEX, file);
+    if (existsSync(from)) copyFileSync(from, path.join(INDEX_DIR, file));
+  } catch { /* 没有就用空索引 */ }
+}
 
 let checks = 0;
 let failed = 0;
@@ -440,6 +459,11 @@ const { runQuery: sharedQuery } = await import(pathToFileURL(path.join(ROOT, 'li
     await new Promise((r) => srv.server.close(r));
   }
 }
+
+// 收尾：删掉临时索引目录（测试只该碰它自己创建的东西）
+try {
+  rmSync(INDEX_DIR, { recursive: true, force: true });
+} catch { /* 清不掉不影响结论 */ }
 
 console.log(`\n==== ${checks - failed}/${checks} session-index panel checks passed ====`);
 process.exit(failed === 0 ? 0 : 1);

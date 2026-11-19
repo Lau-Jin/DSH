@@ -58,6 +58,10 @@ const child = spawn(process.execPath, [path.join(here, 'server.mjs')], {
     SIYUAN_BRIDGE_URL: stageUrl,
     SESSION_INDEX_WATCH_DEBOUNCE_MS: '60000',
     SESSION_INDEX_AUTO_INTERVAL_MS: '3600000',
+    // 冒烟起的临时 server **不要**开面板 HTTP 通道：它会和正在跑的 DSH 实例抢 8799，
+    // 并把 http-url.txt 覆盖成一个会随冒烟进程退出而失效的端口。
+    // 通道本身由 test-panel.mjs 起真服务覆盖。
+    SESSION_INDEX_HTTP_PORT: '0',
   },
 });
 child.stderr.on('data', (d) => process.stderr.write(`[server] ${d}`));

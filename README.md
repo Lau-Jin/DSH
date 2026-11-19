@@ -5,7 +5,8 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.9.2** | **真正的根因：同步模块用 `execFileSync` 跑 git，把 MCP 进程的事件循环卡住**。日志坐实：面板打开时的远端探测 `GET /api/sync/probe` 从 08:17:08.467 卡到 08:17:17.324（**8.85 秒**），期间面板的 `/api/health` 探活（900ms 超时）全部超时 → 「没有找到本地服务」→ 面板空白。git 一律改为异步 `execFile`（只剩 `gitAvailable` 保留一次本地快查并缓存），面板探活超时 900ms → 3000ms，远端探测延后 1.2 秒、不挡列表。新增回归测试：**故意慢 1.5 秒的假 git 远端 → 探测耗时 1783ms，期间面板 HTTP 6ms 秒回**。smoke 99 → 100、test-sync 51 → 54。 |
+| 版本 | **v2.9.3** | **测试不再污染真实索引**：`test-panel` 先把真实索引的卡文件拷进临时目录、并把 `SESSION_INDEX_DIR` 指过去，再 import 宿主半身 —— 之前跑一次测试就会把**正在运行的 DSH 的 `server-path.txt`** 改成源码路径（门禁因此 FAIL，MCP 还可能被指回源码目录）。冒烟起的临时 server 也关掉面板 HTTP 通道（`SESSION_INDEX_HTTP_PORT=0`），不再和活实例抢 8799、不再把 `http-url.txt` 写成会失效的端口。README 新增「面板失效怎么查」三份日志速查表。 |
+| **v2.9.2** | **真正的根因：同步模块用 `execFileSync` 跑 git，把 MCP 进程的事件循环卡住**。日志坐实：面板打开时的远端探测 `GET /api/sync/probe` 从 08:17:08.467 卡到 08:17:17.324（**8.85 秒**），期间面板的 `/api/health` 探活（900ms 超时）全部超时 → 「没有找到本地服务」→ 面板空白。git 一律改为异步 `execFile`（只剩 `gitAvailable` 保留一次本地快查并缓存），面板探活超时 900ms → 3000ms，远端探测延后 1.2 秒、不挡列表。新增回归测试：**故意慢 1.5 秒的假 git 远端 → 探测耗时 1783ms，期间面板 HTTP 6ms 秒回**。smoke 99 → 100、test-sync 51 → 54。 |
 | **v2.9.1** | **面板「打不开 / 一片空白」可诊断**：面板 HTTP 通道的跨源判定放宽到「本机来源」（回环、本机名、`.localhost` 之类、本机自定义 scheme 如 `dsh-app://`），公网站点与局域网默认仍不放行（可用 `SESSION_INDEX_HTTP_ALLOW_ORIGIN` 单独放行）；面板失败时把两条通道各自的失败原因一并显示，并**自动向宿主机自报**（`<索引目录>/client-diagnostics.log`）；HTTP 服务记录每次请求的 Origin 与状态码（`<索引目录>/http-access.log`）—— 「面板空白」从此在宿主机上可定位，不用靠猜。 |
 | **v2.9.0** | **另一台终端「装了就能用」**：工具不再把同步来的会话当空气 —— 守卫从「只看 meta」改成「meta 或会话卡」，`list` 补上同步来的会话（标 `imported`），`get` 在本机没原文时返回会话卡形态（结论/提问/路径，不是报错），`search` 把会话卡纳入精确与语义召回，`recall` 照常召回同步来的记忆。远端地址三级解析（环境变量 → 本机已保存 → 包内 `sync.default.json`）+ **首启自举**（本地一张卡都没有时自动拉一次），新机器不用手填地址。`sync_status` 改为只读本地，远端探测拆到 `sync_probe`（面板不再每次打开都打 git 网络）。`test-sync` 40 → 51。 |
 | **v2.8.1** |
@@ -204,7 +205,7 @@ HTTP 通道把这三层依赖全部去掉，而且**和 agent 用的是同一份
 ### 手工验证（不用开面板）
 
 ```bash
-curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"2.9.2"}
+curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"2.9.3"}
 curl "http://127.0.0.1:8799/api/list?limit=3"
 curl "http://127.0.0.1:8799/api/search?q=%E6%8F%92%E4%BB%B6"
 curl "http://127.0.0.1:8799/api/card?id=<会话id>"
@@ -230,7 +231,7 @@ curl "http://127.0.0.1:8799/api/card?id=<会话id>"
 | `http-access.log` | 面板**到底请求了什么**、Origin 是什么、拿到什么状态码 | 有 `/api/list` 且 `status=200` → 服务端没问题；**没有它** → 请求没发出去或被探活超时掐了；`status=403` → 被跨源策略挡了（看 `origin=` 值） |
 | `host-half.log` | 宿主半身有没有加载、命令有没有注册 | 没有 `apply` 行 = 那一行压根没被 DSH 加载；有 `apply` 没 `command registered` = `commands` 服务没就位 |
 
-**一个已修的典型根因（v2.9.2）**：同步模块用 `execFileSync` 跑 git → **阻塞整个 MCP 进程**，
+**一个已修的典型根因（v2.9.3）**：同步模块用 `execFileSync` 跑 git → **阻塞整个 MCP 进程**，
 面板探活（`/api/health`）超时 → 报「没有找到本地服务」→ 面板空白。
 特征是 `http-access.log` 里**面板的 health 请求被排到几秒之后才记录**（排队等 git 结束）。
 现在 git 全异步，慢远端在后台跑，面板 6ms 内就有响应。
@@ -448,8 +449,8 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 npm registry 来源**（2026-11-18 v2.9.2 发布后切回）：profile 依赖是
-`"dsh-session-index-lau": "^2.9.2"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
+**本机当前是 npm registry 来源**（2026-11-18 v2.9.3 发布后切回）：profile 依赖是
+`"dsh-session-index-lau": "^2.9.3"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
 以后发新版后**点更新即可，不需要卸载重装**；命令行 `pnpm update dsh-session-index-lau` 与点按钮同一条路。
 
 > ⚠ 切回 npm 后，改本机代码**不再即时生效**：要走「改仓库 → 发布 npm → 插件页更新 →
@@ -508,8 +509,8 @@ node smoke.mjs                   # 端到端自测（含标准形态断言）
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.9.2.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
-| `dist/session-index-skill-v2.9.2.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v2.9.3.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
+| `dist/session-index-skill-v2.9.3.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可调 MCP 工具 `session_index_package` 触发打包。
