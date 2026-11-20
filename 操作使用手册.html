@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dsh-session-index 操作使用手册 v3.0.0</title>
+<title>dsh-session-index 操作使用手册 v3.0.1</title>
 <style>
   :root{
     --bg:#f7f9fc; --panel:#ffffff; --panel-2:#f1f5fb; --line:#e2e8f2;
@@ -74,7 +74,7 @@
 <body>
 <div class="layout">
 <aside>
-  <div class="brand">dsh-session-index<small>操作使用手册 · v3.0.0</small></div>
+  <div class="brand">dsh-session-index<small>操作使用手册 · v3.0.1</small></div>
   <input id="q" type="search" placeholder="筛选章节 / 关键词…" autocomplete="off">
   <nav id="nav">
     <div class="grp">开始</div>
@@ -233,8 +233,8 @@ node pack.mjs verify         # 校验 zip 结构
 session_index_package { "mode": "all" }   # MCP 工具，Agent 也能触发</code></pre>
   <table>
     <tr><th>包</th><th>内容</th><th>用途</th></tr>
-    <tr><td><code>dsh-session-index-v3.0.0.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
-    <tr><td><code>session-index-skill-v3.0.0.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
+    <tr><td><code>dsh-session-index-v3.0.1.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
+    <tr><td><code>session-index-skill-v3.0.1.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
   </table>
   <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方按标准流程 <code>pnpm add dsh-session-index-lau</code> 安装即可。</div>
 </section>
@@ -281,6 +281,23 @@ session_index_related { "sessionId": "wb:3aa3ea8d", "app": "all" }</code></pre>
 <pre><button class="copy">复制</button><code>session_index_search { "query": "插件报错怎么修", "limit": 8 }
 session_index_search { "query": "402 401008", "mode": "keyword" }</code></pre>
   <p>只返回命中片段（默认每条约 360 字），<code>total</code> 只是计数，不灌全文。</p>
+  <h3>按会话聚合（v3.0，默认开）</h3>
+  <p>同一会话命中 5 段时，返回 5 条几乎相同的上下文纯属浪费 token。现在默认<b>每个会话只给最相关的一段</b>：
+  <code>results</code> 里一条代表，其余命中序号收在 <code>moreSeqs</code>、命中数记在 <code>hitCount</code>、
+  <code>grouped: true</code>。要逐条看原始命中传 <code>group: false</code>。</p>
+<pre><button class="copy">复制</button><code>session_index_search { "query": "面板失效", "limit": 8 }              // 聚合：每会话一条
+session_index_search { "query": "面板失效", "limit": 8, "group": false } // 逐条原始命中</code></pre>
+  <h3>工作区归一化（v3.0）</h3>
+  <p>同一个项目在真实索引里会散成多种写法 —— 盘符大小写、<code>\</code> 与 <code>/</code>、
+  WorkBuddy 的 <code>d-WorkBuddy工作区-Tool开发-DSH</code> 编码目录、以及父/子目录。
+  直接 <code>includes</code> 比较会漏掉一半，所以现在统一归一化：</p>
+  <table>
+    <tr><th>传什么</th><th>行为</th></tr>
+    <tr><td><code>"DSH"</code>（项目名）</td><td>命中该项目<b>所有路径写法</b></td></tr>
+    <tr><td><code>"D:\WorkBuddy工作区\Tool开发"</code>（完整路径）</td><td>按归一化<b>前缀</b>匹配，子目录里的会话也算</td></tr>
+  </table>
+  <p><code>related</code> 也据此加权：同一个项目的不同写法会给出「同一项目 DSH」这条理由，
+  而不只是精确相等时的「同一工作区」。</p>
 </section>
 
 <section id="s8" data-kw="自动注入 prompts resources 上下文 Skill 通知">
@@ -312,6 +329,9 @@ resources/read { "uri": "session-index://package" }</code></pre>
     <tr><td><code>session_index_forget</code></td><td>归档/删除记忆</td><td><code>id, purge</code></td></tr>
     <tr><td><code>session_index_package</code></td><td><b>自动打包插件/技能包</b></td><td><code>mode: plugin / skill / all / status</code></td></tr>
     <tr><td><code>session_index_vectors</code></td><td>向量缓存状态/同步/查询</td><td><code>action, query, limit</code></td></tr>
+    <tr><td><code>session_index_todos</code></td><td><b>我还有什么没做完</b>：扫最近会话抽 TODO/待办/下一步/还没做/待验证（排除「已完成」语气、跳过工具记录与代码块），按项目分组，带 <code>sessionId + seq</code></td><td><code>limit（扫几个会话，默认 20）, perSession, maxItems, app, workspace, since</code></td></tr>
+    <tr><td><code>session_index_resume</code></td><td><b>接续包</b>：给会话 id 或主题，产出一段可直接粘进新会话的上下文（目标 / 结论 / 未完成 / 涉及路径 / 关键词 / 相关记忆）</td><td><code>sessionId, query, app, workspace, limit, maxChars</code></td></tr>
+    <tr><td><code>session_index_doctor</code></td><td><b>索引体检</b>：meta / 分片 / 卡片一致性、孤儿分片、空分片、临时残留、备份堆积、体积、自动维护状态</td><td><code>fix（只清 1 小时前的临时/孤儿与多余备份）</code></td></tr>
     <tr><td><code>session_index_refresh</code></td><td><b>手动</b>立即刷新；日常由事件+轮询自动维护</td><td><code>force</code></td></tr>
     <tr><td><code>session_index_stage</code></td><td><b>会话整理 → 思源桥待入库</b>；两步确认、只入队不写库</td><td><code>status, query, sessionIds, app, template, title, hpath, notebook, note, confirmToken</code></td></tr>
   </table>
@@ -321,9 +341,15 @@ resources/read { "uri": "session-index://package" }</code></pre>
       <li>除 <code>stage</code> 外所有工具只读索引；<code>remember/forget/package/refresh</code> 只写派生目录。<code>stage</code> 只向本机思源桥投递「待入库」稿，<b>不碰思源笔记库</b>。</li>
       <li>错误统一返回 <code>{"error":"中文说明"}</code> 且 <code>isError: true</code>，不泄漏堆栈。</li>
       <li>服务日志走 stderr，stdout 只写 JSON-RPC 与通知。</li>
+      <li><b>检索默认按会话聚合</b>（v3.0）：同一会话命中多段时只给最相关的一段，其余 seq 收在 <code>moreSeqs</code>、
+        命中数记在 <code>hitCount</code>；传 <code>group: false</code> 退回逐条。</li>
+      <li><b>workspace 过滤不必写全路径</b>（v3.0）：传项目名（如 <code>"DSH"</code>）即可命中该项目所有写法
+        —— 盘符大小写、<code>\</code> 与 <code>/</code>、WorkBuddy 的 <code>d-WorkBuddy工作区-…-DSH</code>
+        编码目录、以及父/子目录都算同一个项目。</li>
     </ul>
   </details>
 <pre><button class="copy">复制</button><code>brief（接上历史+记忆） → related / thread → search（片段） → get（原文） → remember
+todos（我还有什么没做完） / resume（接着上次继续干） / doctor（索引体检）
 需要分发时 package；索引与新会话由后台自动维护，通常不需要 refresh</code></pre>
 </section>
 
@@ -364,6 +390,28 @@ session_index_list   { "app": "workbuddy" }</code></pre>
   "type": "decision", "tags": ["架构"], "importance": 5 }
 session_index_recall   { "type": "todo", "limit": 20 }
 session_index_forget   { "id": "n-xxxx" }</code></pre>
+  <h3>我还有什么没做完（v3.0）</h3>
+<pre><button class="copy">复制</button><code>session_index_todos { "limit": 20 }                      // 扫最近 20 个会话
+session_index_todos { "workspace": "DSH", "perSession": 3 }  // 只看某个项目
+session_index_todos { "since": &lt;7 天前的毫秒时间戳&gt; }   // 只看最近一周</code></pre>
+  <p>只认<b>对话正文</b>：工具调用的参数/输出、Markdown 代码块、测试输出行都会被跳过
+  （第一版没做这个过滤时，真实数据上抽出的 31 条里大半是 JSON 与命令输出）；
+  「已修复 / 已完成」这类语气会被否决；跨会话复述的同一件事只留一条并记在
+  <code>alsoInSessions</code>。每条都带 <code>sessionId + seq</code>，可以直接 <code>get</code> 回原文。</p>
+
+  <h3>接着上次继续干（v3.0）</h3>
+<pre><button class="copy">复制</button><code>session_index_resume { "sessionId": "&lt;会话 id 前缀&gt;", "maxChars": 4000 }
+session_index_resume { "query": "思源桥 面板", "limit": 2 }</code></pre>
+  <p>返回的 <code>context</code> 是一段 Markdown，<b>原样粘进新会话</b>就能接上：目标（提问）→ 已有结论 →
+  未完成事项 → 涉及路径 → 关键词 → 已记下的相关事实。比 <code>brief</code> 更「可直接开工」。</p>
+
+  <h3>索引不对劲时先体检（v3.0）</h3>
+<pre><button class="copy">复制</button><code>session_index_doctor                    // 只看：healthy / counts / problems / 最大分片
+session_index_doctor { "fix": true }    // 顺手清理：1 小时前的 .tmp-* 与孤儿分片、只留 5 份 notes 备份</code></pre>
+  <p>检查项：meta 声明的分片是否存在、空分片、没有 meta 引用的孤儿分片、缺卡的会话、
+  同步来的卡片（本机无原文）、<code>.tmp-*</code> 残留、<code>notes.json.bak-*</code> 堆积、索引体积、
+  自动维护状态与上次错误。<code>fix</code> 只清<b>确定安全</b>的东西，绝不删有效分片。</p>
+
   <h3>打包分发 / 检查自动维护</h3>
 <pre><button class="copy">复制</button><code>session_index_package { "mode": "all" }     // 或 skill / plugin / status
 session_index_status                        // 看 autoIndex.watch 与 packs
@@ -502,7 +550,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
 ├── smoke.mjs               93 项端到端自测
 ├── icon.svg                插件页图标（卡片 + 放大镜，64×64 SVG，938 字节）
 ├── plugin.json             机器可读插件能力清单（含安装方式与仓库信息）
-├── package.json            v3.0.0 / icon / dsh.bundle.patch / dsh.plugin / 脚本
+├── package.json            v3.0.1 / icon / dsh.bundle.patch / dsh.plugin / 脚本
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能
@@ -562,7 +610,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     <li><b>v2.6.0</b> 新增<b>「会话检索」面板</b>（侧栏入口 + main 面板）：搜索框 + 会话卡列表（DSH 蓝 / WorkBuddy 黄左色条）+ 右侧详情（结论 · 提问 · 涉及路径 · 关键词 · 文件 · 工具）。数据走宿主半身注册的 <code>session-index</code> 斜杠命令；浏览器半身不碰文件系统。新增 <code>test-panel.mjs</code>。</li>
     <li><b>v2.7.0</b> <b>面板改为「配合 MCP 用」</b>：MCP 服务进程新增<b>本地只读 HTTP</b>（<code>lib/http-api.mjs</code>，<code>127.0.0.1:8799</code> 起、占用顺延到 8808），面板<b>优先直连它取数</b>——不再需要会话 id、不再依赖宿主半身那一行；命令通道降为兜底。新增 <code>lib/panel-api.mjs</code> 作为面板 / 斜杠命令 / HTTP <b>三条出口共用的唯一查询实现</b>（排序与 <code>session_index_brief</code> 同源），删掉宿主半身里那套朴素打分。宿主半身补 <code>host-half.log</code> 自诊断；面板 meta 行显示当前数据通道。<code>test-panel</code> 68 → 91、<code>smoke</code> 86 → 93。</li>
   </ul>
-  <h3>v3.0.0 跨终端同步</h3>
+  <h3>v3.0.1 跨终端同步</h3>
   <p>面板 meta 行右侧的「同步」按钮打开同步模块：填一个 <b>GitHub Private 仓地址</b>（建议
   <code>git@github.com:你/dsh-session-index-data.git</code>）→ 保存 → <b>上传到远端</b>；
   另一台机器装好插件、填同一地址 → <b>从远端合并</b>。配置过之后，面板每次打开都会看一眼远端，
@@ -595,7 +643,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
   功能（插件、技能、面板、17 个工具）随插件安装走，<b>不需要同步</b>。</p>
 </section>
 
-<footer>dsh-session-index v3.0.0 · 操作使用手册 · 生成于 2026-11-18 · 零第三方依赖</footer>
+<footer>dsh-session-index v3.0.1 · 操作使用手册 · 生成于 2026-11-18 · 零第三方依赖</footer>
 </main>
 </div>
 <script>
