@@ -153,6 +153,41 @@ function check(name, ok, extra) {
     check('list 带 project 字段', panelApi.listCards(dir, {}).items.every((i) => Boolean(i.project)));
     check('search 带 project 与命中信息',
       panelApi.searchCards(dir, { query: '插件' }).items.every((i) => i.project !== undefined));
+
+    /* ------------------------------------------------ ③ 卡片持久化未完成事项 */
+    const { buildCard } = await import(pathToFileURL(path.join(ROOT, 'lib', 'cards.mjs')).href);
+    const cardWithOpen = buildCard(
+      { id: 's-open', title: '带未完成事项的会话', workspace: 'D:\\p\\DSH', app: 'dsh', updatedAt: Date.now(), records: 3 },
+      [
+        { i: 1, role: 'assistant', t: 'text', ts: Date.now(), text: '下一步要补齐 nacos 配置模板。' },
+        { i: 2, role: 'assistant', t: 'text', ts: Date.now(), text: '这个模块已修复完毕，可以收工。' },
+        { i: 3, role: 'tool-call', t: 'tool/call', ts: Date.now(), text: '[tool/call edit] 还没有写完' },
+      ],
+    );
+    check('③ 建卡时就抽好未完成事项', Array.isArray(cardWithOpen.openItems) && cardWithOpen.openCount === 1,
+      `openCount=${cardWithOpen.openCount}`);
+    check('③ 卡片里的未完成事项排除了已完成语气与工具记录',
+      cardWithOpen.openItems.length === 1 && /nacos/.test(cardWithOpen.openItems[0].text),
+      JSON.stringify(cardWithOpen.openItems).slice(0, 90));
+
+    // 把这张卡写进索引，验证「面板待办只读卡片、不需要会话分片」
+    const withOpen = { ...cards, cards: { ...cards.cards, 's-open': cardWithOpen } };
+    fs.writeFileSync(path.join(dir, 'cards.json'), JSON.stringify(withOpen));
+    const t0 = Date.now();
+    const todosView = panelApi.todosFromCards(dir, { limit: 20, perSession: 3 });
+    const elapsed = Date.now() - t0;
+    check('① 待办视图只读卡片（快，且不需要分片）', todosView.ok === true && elapsed < 300,
+      `${elapsed}ms total=${todosView.total}`);
+    check('① 待办带来源会话与项目',
+      todosView.items.length >= 1 && todosView.items.every((i) => i.sessionId && i.project),
+      `${todosView.items.length} 条`);
+    check('① 待办按项目分组', Array.isArray(todosView.byProject) && todosView.byProject.length >= 1,
+      todosView.byProject.map((g) => `${g.project}:${g.count}`).join(', '));
+    check('③ 没有 openItems 的老卡片被计入 missingPersisted', todosView.missingPersisted >= 3,
+      `missing=${todosView.missingPersisted}`);
+    check('① 待办支持按项目过滤',
+      panelApi.todosFromCards(dir, { workspace: 'DSH' }).items.length >= 1
+      && panelApi.todosFromCards(dir, { workspace: 'Other' }).items.length === 0);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

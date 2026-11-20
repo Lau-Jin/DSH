@@ -30,8 +30,8 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 | 找回记过的结论 | `session_index_recall`（时间衰减排序） |
 | 归档 / 删除记忆 | `session_index_forget`（默认归档，不物理删除） |
 | 查看索引与自动维护状态 | `session_index_status` |
-| **我还有什么没做完 / 遗留事项** | **`session_index_todos`**（扫最近会话抽 TODO/待办/下一步，排除「已完成」语气，按项目分组） |
-| **接着上次继续干（要一段可直接粘的上下文）** | **`session_index_resume`**（目标/结论/未完成/涉及路径/关键词/相关记忆，一次给全） |
+| **我还有什么没做完 / 遗留事项** | **`session_index_todos`**（默认读卡片里预抽的 `openItems`，0 解压；`refresh: true` 现读记录重算） |
+| **接着上次继续干（要一段可直接粘的上下文）** | **`session_index_resume`**（目标/结论/未完成/涉及路径/关键词/相关记忆；`stage: true` 可一并投到思源桥待入库） |
 | **索引是否健康 / 清掉孤儿与残留** | **`session_index_doctor`**（meta/分片/卡片一致性、孤儿分片、备份堆积；`fix:true` 只清安全项） |
 | 手动触发增量刷新 | `session_index_refresh` |
 | 重新生成分发包 | `session_index_package` |

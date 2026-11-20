@@ -1,5 +1,5 @@
 /**
- * 会话检索面板（dsh-session-index v3.0.1）单测。
+ * 会话检索面板（dsh-session-index v3.1.0）单测。
  *
  * 两半各测：
  *   1. 宿主半身 `lib/index.mjs`：路径记录仍在 + 新增的 `session-index` 命令
@@ -372,6 +372,15 @@ const { runQuery: sharedQuery } = await import(pathToFileURL(path.join(ROOT, 'li
 
   const card = handleRequest(INDEX_DIR, u('/api/card?id=' + encodeURIComponent(list.items[0].id))).body;
   check('http: card 取到全文（含 decisions）', card.ok === true && Array.isArray(card.card.decisions));
+
+  // ① 面板「待办」页签的数据源：只读卡片里预抽的 openItems，不走会话分片
+  const todosRes = handleRequest(INDEX_DIR, u('/api/todos?limit=20'));
+  check('http: /api/todos 可用', todosRes.code === 200 && todosRes.body.ok === true,
+    `total=${todosRes.body.total} missing=${todosRes.body.missingPersisted}`);
+  check('http: /api/todos 结构完整（items + byProject）',
+    Array.isArray(todosRes.body.items) && Array.isArray(todosRes.body.byProject));
+  check('http: /api/todos 支持项目过滤',
+    handleRequest(INDEX_DIR, u('/api/todos?workspace=dsh')).body.ok === true);
   check('http: 未知路由给 404', handleRequest(INDEX_DIR, u('/nope')).code === 404);
 
   // 跨源策略：会话卡是会话元数据，公网站点与局域网默认都不许读；

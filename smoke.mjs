@@ -311,6 +311,23 @@ try {
   check('stage decisions 模板可用', dec.dryRun === true && dec.chars > 0);
 
   check('空 query 被规范化拒绝', (await call('session_index_search', { query: '' })).result?.isError === true);
+
+  // ---- v3.1：卡片持久化未完成事项 / 接续包 / 体检
+  const todosRes = await payload(await call('session_index_todos', { limit: 10 }));
+  check('todos 可用且来源可辨（卡片或记录）',
+    typeof todosRes.total === 'number' && typeof todosRes.fromCards === 'number'
+    && typeof todosRes.fromRecords === 'number',
+    `total=${todosRes.total} cards=${todosRes.fromCards} records=${todosRes.fromRecords}`);
+
+  const resumeRes = await payload(await call('session_index_resume', { maxChars: 2000 }));
+  check('resume 产出可直接粘贴的上下文',
+    typeof resumeRes.context === 'string' && resumeRes.context.includes('接续上下文'), `${resumeRes.chars} 字`);
+  check('resume 声明了 stage 用法', /stage/.test(String(resumeRes.hint || '')));
+
+  const doctorRes = await payload(await call('session_index_doctor', {}));
+  check('doctor 给出健康判定与计数',
+    typeof doctorRes.healthy === 'boolean' && doctorRes.counts && typeof doctorRes.counts.cards === 'number',
+    `healthy=${doctorRes.healthy} cards=${doctorRes.counts?.cards}`);
   check('通知通道可用（声明级）', Array.isArray(notifications), `收到 ${notifications.length} 条通知`);
 } catch (err) {
   check('冒烟流程', false, err.message);
