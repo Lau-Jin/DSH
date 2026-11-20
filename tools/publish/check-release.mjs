@@ -287,7 +287,12 @@ if (POST) {
         finally { child.stdin.end(); child.kill(); }
       })();
     });
-    check('已装包 MCP 握手与工具清单', handshake.version === srcVer && handshake.count === 14 && handshake.hasStage,
+    // 工具数从 plugin.json 读（单一事实来源）：以前写死 14，加工具就要改门禁，
+  // 和 smoke 里写死版本号是同一种毛病。
+  const expectedTools = (() => {
+    try { return JSON.parse(fs.readFileSync(path.join(c.src, 'plugin.json'), 'utf8'))?.mcp?.toolCount ?? 0; } catch { return 0; }
+  })();
+  check('已装包 MCP 握手与工具清单', handshake.version === srcVer && handshake.count === expectedTools && handshake.hasStage,
       `v${handshake.version} / ${handshake.count} 工具 / stage=${handshake.hasStage}`);
     check('已装包可探测思源桥', handshake.bridge === true);
   }
