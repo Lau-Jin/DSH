@@ -6,7 +6,7 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 
 # 跨会话历史接入
 
-你有 `session_index_*` 系列 MCP 工具（共 **14 个**）。所有历史会话已预先建好索引，源会话文件是分帧 zstd 压缩，**不要直接去读 `~/.dsh/sessions` 下的 `.zstd` 文件**——那会重复消耗大量时间和 token。
+你有 `session_index_*` 系列 MCP 工具（共 **17 个**）。所有历史会话已预先建好索引，源会话文件是分帧 zstd 压缩，**不要直接去读 `~/.dsh/sessions` 下的 `.zstd` 文件**——那会重复消耗大量时间和 token。
 
 索引覆盖 DSH 与 WorkBuddy 两个应用的会话，`session_index_*` 的 `app` 参数可过滤 `dsh` / `workbuddy` / `all`。
 
@@ -30,6 +30,9 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 | 找回记过的结论 | `session_index_recall`（时间衰减排序） |
 | 归档 / 删除记忆 | `session_index_forget`（默认归档，不物理删除） |
 | 查看索引与自动维护状态 | `session_index_status` |
+| **我还有什么没做完 / 遗留事项** | **`session_index_todos`**（扫最近会话抽 TODO/待办/下一步，排除「已完成」语气，按项目分组） |
+| **接着上次继续干（要一段可直接粘的上下文）** | **`session_index_resume`**（目标/结论/未完成/涉及路径/关键词/相关记忆，一次给全） |
+| **索引是否健康 / 清掉孤儿与残留** | **`session_index_doctor`**（meta/分片/卡片一致性、孤儿分片、备份堆积；`fix:true` 只清安全项） |
 | 手动触发增量刷新 | `session_index_refresh` |
 | 重新生成分发包 | `session_index_package` |
 | 管理可选向量索引 | `session_index_vectors` |
@@ -38,6 +41,14 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 ## 铁律
 
 - 顺序是 **status → brief → related/thread → search → get**；不要一上来就取全文或全库大范围搜索。
+- 用户问「还有什么没做完 / 遗留 / 下一步」→ 用 **`session_index_todos`**，别自己翻会话。
+- 用户说「接着上次那个活继续」→ 用 **`session_index_resume`** 拿上下文包，比 brief 更直接。
+- 面板或工具报「索引/数据不对」→ 先跑 **`session_index_doctor`**，它会把问题定位到具体文件；
+  要清理再加 `fix: true`。
+- `session_index_search` 默认**按会话聚合**（同一会话只给最相关的一段，其余 seq 收在 `moreSeqs`）——
+  这是为了省 token；要逐条看原始命中传 `group: false`。
+- 按工作区过滤时不必写全路径：`workspace: "DSH"` 就能命中该项目**所有路径写法**
+  （盘符大小写、斜杠、WorkBuddy 的 `d-WorkBuddy工作区-…-DSH` 编码目录都算同一个项目）。
 - `session_index_search` 默认排除系统注入的时间/上下文快照，只有排查框架行为时才加 `includeSystem: true`；`mode: keyword` 可切回精确匹配。
 - 刚结束的会话查不到时无需手动干预：文件事件会自动纳入索引（数秒内）。确需立即同步才调 `session_index_refresh`（增量，通常 < 1 秒）。
 - 会话卡里的结论是规则抽取的，可能不完整；涉及关键决策时用 `search` / `get` 回原文核对。
@@ -49,7 +60,7 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 
 1. DSH → **插件页** → 粘贴仓库地址 `https://github.com/Lau-Jin/DSH` → 安装 → **完全退出 DSH 再打开**（最小化不算）。
    或命令行：`cd ~/.dsh/profiles/desktop && pnpm add dsh-session-index-lau`。
-2. 装完自动发生三件事：包内 `cordis.patch.yml` 挂上 MCP stdio 客户端（本 Skill 的 14 个工具即可用）、
+2. 装完自动发生三件事：包内 `cordis.patch.yml` 挂上 MCP stdio 客户端（本 Skill 的 17 个工具即可用）、
    宿主半身把 `server.mjs` 路径写进 `server-path.txt`、本文件被自动装到 `%USERPROFILE%\.dsh/skills\session-index\SKILL.md`。
 3. 前置：Node ≥ 22.15（需要 `zlib.zstdDecompressSync`；插件页安装会自动挑 DSH 自带的 Node）。
 

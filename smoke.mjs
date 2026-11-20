@@ -143,7 +143,8 @@ try {
 
   const listed = await request('tools/list');
   const names = (listed.result?.tools || []).map((t) => t.name);
-  check('tools/list 返回 14 个工具', names.length === 14 && names.includes('session_index_stage'), `${names.length} 个`);
+  check('tools/list 返回 17 个工具', names.length === 17 && names.includes('session_index_stage')
+    && names.includes('session_index_todos') && names.includes('session_index_resume') && names.includes('session_index_doctor'), `${names.length} 个`);
   check('ping', (await request('ping')).result !== undefined);
 
   // 自动索引守护 + 文件事件监听
@@ -273,7 +274,7 @@ try {
     check(`resources/read ${uri.split('//')[1]}`, (r.result?.contents?.[0]?.text || '').length > 10);
   }
   const pluginJson = JSON.parse((await request('resources/read', { uri: 'session-index://plugin.json' })).result.contents[0].text);
-  check('插件清单机器可读', pluginJson.mcp?.toolCount === 14 && pluginJson.automatic?.watchNewSessions === true, `v${pluginJson.version}`);
+  check('插件清单机器可读', pluginJson.mcp?.toolCount === 17 && pluginJson.automatic?.watchNewSessions === true, `v${pluginJson.version}`);
   const cardUri = await request('resources/read', { uri: `session-index://card/${withRecords.id.slice(0, 12)}` });
   check('resources/read 单会话卡模板', (cardUri.result?.contents?.[0]?.text || '').includes('"id"'));
 

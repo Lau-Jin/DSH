@@ -1,13 +1,24 @@
 {
   "name": "dsh-session-index",
-  "version": "2.9.3",
+  "version": "3.0.0",
   "icon": "icon.svg",
   "displayName": {
     "zh": "全会话索引与跨会话记忆",
     "en": "Session Index & Cross-Session Memory"
   },
   "description": "完全化的 DSH 插件：在 DSH 插件页粘贴仓库地址即可安装（bundle 自动挂载，无需改配置、无需命令行），装完自动建索引、侧栏提供「会话检索」面板（搜索并翻看每次会话的结论与涉及路径）、文件事件驱动识别新会话（无需重启），索引变更主动通知客户端，并自动生成可分发插件包与技能包。零第三方依赖，源会话只读。",
-  "keywords": ["dsh", "dsh-bundle", "mcp", "session", "memory", "cross-session", "semantic-search", "auto-watch", "auto-package", "workbuddy"],
+  "keywords": [
+    "dsh",
+    "dsh-bundle",
+    "mcp",
+    "session",
+    "memory",
+    "cross-session",
+    "semantic-search",
+    "auto-watch",
+    "auto-package",
+    "workbuddy"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/Lau-Jin/DSH.git",
@@ -18,22 +29,53 @@
       "declared": "package.json → dsh.bundle.patch = ./cordis.patch.yml",
       "patch": "cordis.patch.yml",
       "entries": [
-        { "id": "session-index-host", "name": "dsh-session-index", "role": "宿主半身：解析自身安装路径" },
-        { "id": "mcp-session-index", "name": "@deepseek-ai/dsh-mcp-client", "role": "MCP stdio 客户端：暴露工具/prompts/resources" }
+        {
+          "id": "session-index-host",
+          "name": "dsh-session-index",
+          "role": "宿主半身：解析自身安装路径"
+        },
+        {
+          "id": "mcp-session-index",
+          "name": "@deepseek-ai/dsh-mcp-client",
+          "role": "MCP stdio 客户端：暴露工具/prompts/resources"
+        }
       ],
       "selfResolving": "两处 !!js 表达式在 DSH 加载配置时求值，安装目录变化无需改文件"
     },
     "ways": [
-      { "id": "plugin-page", "label": "DSH 插件页（推荐）", "steps": ["粘贴仓库地址", "安装", "重启 DSH"], "needsCli": false },
-      { "id": "pnpm", "label": "pnpm 全局链接", "steps": ["pnpm add <路径或仓库>", "把 dsh-session-index 加入 profile 的 dsh.profile.bundles", "重启 DSH"] }
+      {
+        "id": "plugin-page",
+        "label": "DSH 插件页（推荐）",
+        "steps": [
+          "粘贴仓库地址",
+          "安装",
+          "重启 DSH"
+        ],
+        "needsCli": false
+      },
+      {
+        "id": "pnpm",
+        "label": "pnpm 全局链接",
+        "steps": [
+          "pnpm add <路径或仓库>",
+          "把 dsh-session-index 加入 profile 的 dsh.profile.bundles",
+          "重启 DSH"
+        ]
+      }
     ]
   },
   "mcp": {
     "transport": "stdio",
     "entry": "server.mjs",
     "resolvedBy": "cordis.patch.yml 的 !!js 表达式（按 环境变量 → 宿主记下的路径文件 → profile 标准安装位置 依次探测）",
-    "capabilities": ["tools", "prompts", "resources", "instructions", "listChanged"],
-    "toolCount": 14,
+    "capabilities": [
+      "tools",
+      "prompts",
+      "resources",
+      "instructions",
+      "listChanged"
+    ],
+    "toolCount": 17,
     "tools": [
       "session_index_status",
       "session_index_brief",
@@ -47,10 +89,18 @@
       "session_index_forget",
       "session_index_package",
       "session_index_vectors",
+      "session_index_todos",
+      "session_index_resume",
+      "session_index_doctor",
       "session_index_refresh",
       "session_index_stage"
     ],
-    "prompts": ["session-context", "resume-topic", "catch-up", "quickstart"],
+    "prompts": [
+      "session-context",
+      "resume-topic",
+      "catch-up",
+      "quickstart"
+    ],
     "resources": [
       "session-index://guide",
       "session-index://plugin.json",
@@ -74,20 +124,38 @@
     "notifyClientOnIndexChange": true,
     "skillAutoInstall": true,
     "envCustomPreservedOnReinstall": true,
-    "autoPackage": ["plugin", "skill"]
+    "autoPackage": [
+      "plugin",
+      "skill"
+    ]
   },
   "packages": {
     "directory": "dist",
-    "plugin": "dsh-session-index-v2.9.3.zip",
-    "skill": "session-index-skill-v2.9.3.zip",
+    "plugin": "dsh-session-index-v3.0.0.zip",
+    "skill": "session-index-skill-v3.0.0.zip",
     "generator": "lib/pack.mjs (zero dependency ZIP writer)",
-    "contents": ["MANIFEST.json", "INSTALL.md"],
-    "excludes": ["会话索引分片 *.jsonl.gz", "meta/cards/notes/vectors.json", "备份与临时文件", "已有 zip"]
+    "contents": [
+      "MANIFEST.json",
+      "INSTALL.md"
+    ],
+    "excludes": [
+      "会话索引分片 *.jsonl.gz",
+      "meta/cards/notes/vectors.json",
+      "备份与临时文件",
+      "已有 zip"
+    ]
   },
   "requirements": {
     "node": ">=22.15",
-    "os": ["win32", "darwin", "linux"],
-    "sourceDirs": ["~/.dsh/sessions", "~/.workbuddy/projects"]
+    "os": [
+      "win32",
+      "darwin",
+      "linux"
+    ],
+    "sourceDirs": [
+      "~/.dsh/sessions",
+      "~/.workbuddy/projects"
+    ]
   },
   "safety": {
     "sourceSessions": "read-only",

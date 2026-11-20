@@ -1,5 +1,5 @@
 /**
- * 会话检索面板（dsh-session-index v2.9.3）单测。
+ * 会话检索面板（dsh-session-index v3.0.0）单测。
  *
  * 两半各测：
  *   1. 宿主半身 `lib/index.mjs`：路径记录仍在 + 新增的 `session-index` 命令

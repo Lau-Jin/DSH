@@ -5,13 +5,14 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v2.9.3** | **测试不再污染真实索引**：`test-panel` 先把真实索引的卡文件拷进临时目录、并把 `SESSION_INDEX_DIR` 指过去，再 import 宿主半身 —— 之前跑一次测试就会把**正在运行的 DSH 的 `server-path.txt`** 改成源码路径（门禁因此 FAIL，MCP 还可能被指回源码目录）。冒烟起的临时 server 也关掉面板 HTTP 通道（`SESSION_INDEX_HTTP_PORT=0`），不再和活实例抢 8799、不再把 `http-url.txt` 写成会失效的端口。README 新增「面板失效怎么查」三份日志速查表。 |
+| 版本 | **v3.0.0** | **三块新能力 + 两个体验改造**。新工具：`session_index_todos`（跨会话未完成事项聚合 —— 只认对话正文、跳过工具记录与代码块、排除「已完成」语气、跨会话去重并记 `alsoInSessions`）、`session_index_resume`（接续包：目标/结论/未完成/路径/关键词/记忆一段给全）、`session_index_doctor`（索引体检：meta/分片/卡片一致性、孤儿分片、备份堆积，`fix:true` 只清安全项）。体验：检索**默认按会话聚合**（每会话一条代表 + `moreSeqs`，省 token；`group:false` 退回逐条）；**工作区归一化**（同一项目的盘符/斜杠/WorkBuddy 编码目录/父子目录都算同项目，过滤只写项目名即可，面板按项目分组）。面板新增应用/项目/时间段过滤、搜索历史（↑↓ 调出）、键盘导航（j/k、Enter、Esc）、条目高亮。工具数 14 → **17**。新增 `test-v3.mjs` 33 项。 |
+| **v2.9.3** | **测试不再污染真实索引**：`test-panel` 先把真实索引的卡文件拷进临时目录、并把 `SESSION_INDEX_DIR` 指过去，再 import 宿主半身 —— 之前跑一次测试就会把**正在运行的 DSH 的 `server-path.txt`** 改成源码路径（门禁因此 FAIL，MCP 还可能被指回源码目录）。冒烟起的临时 server 也关掉面板 HTTP 通道（`SESSION_INDEX_HTTP_PORT=0`），不再和活实例抢 8799、不再把 `http-url.txt` 写成会失效的端口。README 新增「面板失效怎么查」三份日志速查表。 |
 | **v2.9.2** | **真正的根因：同步模块用 `execFileSync` 跑 git，把 MCP 进程的事件循环卡住**。日志坐实：面板打开时的远端探测 `GET /api/sync/probe` 从 08:17:08.467 卡到 08:17:17.324（**8.85 秒**），期间面板的 `/api/health` 探活（900ms 超时）全部超时 → 「没有找到本地服务」→ 面板空白。git 一律改为异步 `execFile`（只剩 `gitAvailable` 保留一次本地快查并缓存），面板探活超时 900ms → 3000ms，远端探测延后 1.2 秒、不挡列表。新增回归测试：**故意慢 1.5 秒的假 git 远端 → 探测耗时 1783ms，期间面板 HTTP 6ms 秒回**。smoke 99 → 100、test-sync 51 → 54。 |
 | **v2.9.1** | **面板「打不开 / 一片空白」可诊断**：面板 HTTP 通道的跨源判定放宽到「本机来源」（回环、本机名、`.localhost` 之类、本机自定义 scheme 如 `dsh-app://`），公网站点与局域网默认仍不放行（可用 `SESSION_INDEX_HTTP_ALLOW_ORIGIN` 单独放行）；面板失败时把两条通道各自的失败原因一并显示，并**自动向宿主机自报**（`<索引目录>/client-diagnostics.log`）；HTTP 服务记录每次请求的 Origin 与状态码（`<索引目录>/http-access.log`）—— 「面板空白」从此在宿主机上可定位，不用靠猜。 |
 | **v2.9.0** | **另一台终端「装了就能用」**：工具不再把同步来的会话当空气 —— 守卫从「只看 meta」改成「meta 或会话卡」，`list` 补上同步来的会话（标 `imported`），`get` 在本机没原文时返回会话卡形态（结论/提问/路径，不是报错），`search` 把会话卡纳入精确与语义召回，`recall` 照常召回同步来的记忆。远端地址三级解析（环境变量 → 本机已保存 → 包内 `sync.default.json`）+ **首启自举**（本地一张卡都没有时自动拉一次），新机器不用手填地址。`sync_status` 改为只读本地，远端探测拆到 `sync_probe`（面板不再每次打开都打 git 网络）。`test-sync` 40 → 51。 |
 | **v2.8.1** |
 | 运行要求 | Node **≥ 22.15**（需要 `zlib.zstdDecompressSync`） |
-| MCP 能力 | **14 个工具** / 4 个提示词 / 8 个资源 |
+| MCP 能力 | **17 个工具** / 4 个提示词 / 8 个资源 |
 | 第三方依赖 | **0**（只用 Node 标准库） |
 | 完整手册 | [`操作使用手册.html`](./操作使用手册.html)（单页 14 章，导航 / 搜索 / 一键复制） |
 
@@ -46,7 +47,7 @@ DSH 的会话存在 `~/.dsh/sessions/` 下，是**上千个独立 zstd 帧拼接
 | 行 id | 包 | 作用 |
 |---|---|---|
 | `session-index-host` | `dsh-session-index` | 宿主半身（`lib/index.mjs`）：用 `import.meta.url` 解析**真实安装目录**，把 `server.mjs` 绝对路径写进 `~/.dsh/session-index/server-path.txt`；另注册 `session-index` 斜杠命令，并往 `~/.dsh/session-index/host-half.log` 追加自诊断行 |
-| `mcp-session-index` | `@deepseek-ai/dsh-mcp-client` | MCP stdio 客户端：14 工具 / 4 提示词 / 8 资源 |
+| `mcp-session-index` | `@deepseek-ai/dsh-mcp-client` | MCP stdio 客户端：17 工具 / 4 提示词 / 8 资源 |
 
 那行配置里的 `command`、`args`、`DSH_HOME` 三处都是 `!!js` 表达式，**在 DSH 加载配置时求值**（不是安装时），
 按「显式环境变量 → 宿主记下的路径文件 → profile 标准安装位置」依次探测。
@@ -166,6 +167,9 @@ DSH 插件页装任何东西，底层都是一次 `pnpm install`。装不上时�
 | `session_index_remember` | 写入长期记忆（类型 / 标签 / 重要度） |
 | `session_index_recall` | 召回长期记忆（时间衰减排序） |
 | `session_index_forget` | 归档或删除记忆（默认归档） |
+| **`session_index_todos`** | **我还有什么没做完**：扫最近会话抽 TODO / 待办 / 下一步 / 还没做 / 待验证（排除「已完成」语气、跳过工具记录与代码块），按项目分组并带 `sessionId + seq` |
+| **`session_index_resume`** | **接续包**：给会话 id 或主题，产出一段可直接粘进新会话的上下文（目标 / 已有结论 / 未完成 / 涉及路径 / 关键词 / 相关记忆） |
+| **`session_index_doctor`** | **索引体检**：meta / 分片 / 卡片一致性、孤儿分片、空分片、临时残留、备份堆积、体积、自动维护状态；`fix:true` 只清安全项 |
 | `session_index_refresh` | 手动增量刷新 |
 | `session_index_package` | 重新生成分发包 |
 | `session_index_vectors` | 可选的向量索引管理 |
@@ -177,6 +181,14 @@ DSH 插件页装任何东西，底层都是一次 `pnpm install`。装不上时�
 
 **搜索模式**：`semantic`（默认，本地同义词扩展 + BM25，零 token）、`keyword`（精确 AND）、
 `hybrid` / `vector`（需配置 embedding，未配置自动降级为本地语义检索）。
+
+**检索默认按会话聚合**（v3.0）：同一会话命中 5 段时只返回**最相关的一段**，其余 seq 收在
+`moreSeqs`、命中数记在 `hitCount` —— 省 token 也更容易读。要逐条看原始命中传 `group: false`。
+
+**工作区归一化**（v3.0）：同一个项目在真实数据里会散成多种写法（盘符大小写、`\` vs `/`、
+WorkBuddy 的 `d-WorkBuddy工作区-Tool开发-DSH` 编码目录、以及父/子目录），
+现在 `workspace` 过滤不必写全路径 —— 传项目名（`"DSH"`）就能命中该项目**所有写法**；
+面板也会按项目分组，并在悬停提示里显示「同一项目的 N 种路径写法」。
 
 ---
 
@@ -205,7 +217,7 @@ HTTP 通道把这三层依赖全部去掉，而且**和 agent 用的是同一份
 ### 手工验证（不用开面板）
 
 ```bash
-curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"2.9.3"}
+curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"3.0.0"}
 curl "http://127.0.0.1:8799/api/list?limit=3"
 curl "http://127.0.0.1:8799/api/search?q=%E6%8F%92%E4%BB%B6"
 curl "http://127.0.0.1:8799/api/card?id=<会话id>"
@@ -231,7 +243,7 @@ curl "http://127.0.0.1:8799/api/card?id=<会话id>"
 | `http-access.log` | 面板**到底请求了什么**、Origin 是什么、拿到什么状态码 | 有 `/api/list` 且 `status=200` → 服务端没问题；**没有它** → 请求没发出去或被探活超时掐了；`status=403` → 被跨源策略挡了（看 `origin=` 值） |
 | `host-half.log` | 宿主半身有没有加载、命令有没有注册 | 没有 `apply` 行 = 那一行压根没被 DSH 加载；有 `apply` 没 `command registered` = `commands` 服务没就位 |
 
-**一个已修的典型根因（v2.9.3）**：同步模块用 `execFileSync` 跑 git → **阻塞整个 MCP 进程**，
+**一个已修的典型根因（v3.0.0）**：同步模块用 `execFileSync` 跑 git → **阻塞整个 MCP 进程**，
 面板探活（`/api/health`）超时 → 报「没有找到本地服务」→ 面板空白。
 特征是 `http-access.log` 里**面板的 health 请求被排到几秒之后才记录**（排队等 git 结束）。
 现在 git 全异步，慢远端在后台跑，面板 6ms 内就有响应。
@@ -249,7 +261,7 @@ curl "http://127.0.0.1:8799/api/card?id=<会话id>"
 ## 跨终端同步（面板 → 私有数据仓）
 
 把**会话卡 + 长期记忆**推到一个 GitHub **Private** 仓；另一台装了本插件的机器拉取合并后，
-也能搜到这台机器的历史结论与记忆。功能本身（插件、技能、面板、14 个工具）**不需要同步** ——
+也能搜到这台机器的历史结论与记忆。功能本身（插件、技能、面板、17 个工具）**不需要同步** ——
 它们随插件安装走，另一终端 `pnpm add` / 插件页安装即得。
 
 ### 面板四步
@@ -449,8 +461,8 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 npm registry 来源**（2026-11-18 v2.9.3 发布后切回）：profile 依赖是
-`"dsh-session-index-lau": "^2.9.3"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
+**本机当前是 npm registry 来源**（2026-11-18 v3.0.0 发布后切回）：profile 依赖是
+`"dsh-session-index-lau": "^3.0.0"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
 以后发新版后**点更新即可，不需要卸载重装**；命令行 `pnpm update dsh-session-index-lau` 与点按钮同一条路。
 
 > ⚠ 切回 npm 后，改本机代码**不再即时生效**：要走「改仓库 → 发布 npm → 插件页更新 →
@@ -509,8 +521,8 @@ node smoke.mjs                   # 端到端自测（含标准形态断言）
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v2.9.3.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
-| `dist/session-index-skill-v2.9.3.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v3.0.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
+| `dist/session-index-skill-v3.0.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可调 MCP 工具 `session_index_package` 触发打包。
@@ -544,7 +556,7 @@ node smoke.mjs                   # 端到端自测（含标准形态断言）
 
 ```text
 dsh-session-index/                  # 仓库根 = 插件根
-├── server.mjs                      # MCP stdio server（14 工具 / prompts / resources）
+├── server.mjs                      # MCP stdio server（17 工具 / prompts / resources）
 ├── cordis.patch.yml                # bundle patch：挂宿主行 + MCP 行（含 !!js 自解析路径）
 ├── build-index.mjs                 # 索引构建（多帧 zstd → 可检索记录 + 会话卡）
 ├── pack.mjs                        # 打包 CLI（零依赖 ZIP writer）

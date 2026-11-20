@@ -22,6 +22,8 @@ import { AutoIndex } from './lib/auto.mjs';
 import { loadMeta, loadCards, readRecords, indexSizeBytes, signatureOf } from './lib/index-store.mjs';
 import { isSystemInjected } from './lib/extract.mjs';
 import { relatedTo, matchQuery, threadOf } from './lib/cards.mjs';
+import { projectOf, groupByProject, matches as matchesWorkspace } from './lib/workspace.mjs';
+import { extractOpenItems, aggregateOpenItems } from './lib/todos.mjs';
 import { loadNotes, saveNotes, addNote, queryNotes, removeNote, noteChunks, notesStats } from './lib/notes.mjs';
 import { expandQuery, matchesQuery, rankCandidates, rrfMerge, makeSnippet } from './lib/semantic.mjs';
 import { embeddingConfig, syncVectors, vectorRank, cardChunks, vectorStats } from './lib/embedding.mjs';
@@ -29,7 +31,7 @@ import { pack, packAll, listPacks } from './lib/pack.mjs';
 import { stageConfig, buildStageDocument, stageToken, bridgeOverview, findDuplicate, postStage, StageError } from './lib/stage.mjs';
 
 const { sessionsRoot, indexDir, workbuddyProjectsDir } = defaultPaths();
-const VERSION = '2.9.3';
+const VERSION = '3.0.0';
 const SUPPORTED_PROTOCOLS = new Set(['2024-11-05', '2025-03-26', '2025-06-18']);
 const log = (...parts) => process.stderr.write(`[dsh-session-index] ${parts.join(' ')}\n`);
 
@@ -447,13 +449,59 @@ async function toolSearch(args = {}) {
     } else degraded = true;
   }
   const page = ranked.slice(offset, offset + limit).map((row) => toSearchResult(row, eq, contextChars));
+
+  // 按会话聚合（默认开）：同一会话命中 5 段时，返回 5 条几乎相同的上下文纯属浪费 token。
+  // 每个会话只留**得分最高的那条**当代表，其余 seq 收进 moreSeqs，并给 hitCount。
+  // 想看全部原始命中就传 group:false。
+  const group = args.group !== false;
+  let grouped = null;
+  if (group) {
+    const bySession = new Map();
+    for (const row of ranked) {
+      const key = row.item.sessionId || row.item.noteId || '(unknown)';
+      const slot = bySession.get(key);
+      if (!slot) {
+        bySession.set(key, { best: row, seqs: row.item.i >= 0 ? [row.item.i] : [], count: 1 });
+        continue;
+      }
+      slot.count += 1;
+      if (row.item.i >= 0) slot.seqs.push(row.item.i);
+      if (row.score > slot.best.score) slot.best = row;
+    }
+    const groups = [...bySession.values()]
+      .sort((a, b) => b.best.score - a.best.score)
+      .slice(offset, offset + limit)
+      .map((slot) => {
+        const base = toSearchResult(slot.best, eq, contextChars);
+        return {
+          ...base,
+          hitCount: slot.count,
+          moreSeqs: slot.seqs.filter((s) => s !== slot.best.item.i).slice(0, 12),
+        };
+      });
+    grouped = {
+      sessions: groups.length,
+      hits: ranked.length,
+      results: groups,
+      hint: groups.length < ranked.length
+        ? '已按会话聚合：每个会话只给最相关的片段，其余命中收在 moreSeqs 里（要逐条看传 group:false）'
+        : undefined,
+    };
+  }
+
   return {
     query: args.query, mode: degraded ? 'semantic' : mode, degraded,
     degradeReason: degraded ? '未配置 embedding，已降级为本地语义检索（零 token）' : undefined,
     expandedTerms: mode === 'keyword' ? undefined : eq.expanded,
     total: ranked.length, returned: page.length, offset,
-    sessionsScanned: candidates.length, app, systemIncluded: includeSystem, vectorInfo, results: page,
-    hint: '默认语义模式：同义扩展召回 + BM25 重排，只返回片段。完整原文用 session_index_get',
+    sessionsScanned: candidates.length, app, systemIncluded: includeSystem, vectorInfo,
+    // grouped=true 时 results 是「每个会话一条代表」；grouped=false 时是原始逐条命中
+    results: grouped ? grouped.results : page,
+    grouped: Boolean(grouped),
+    hitSessions: grouped ? grouped.sessions : undefined,
+    hint: grouped && grouped.hint
+      ? grouped.hint
+      : '默认语义模式：同义扩展召回 + BM25 重排，只返回片段。完整原文用 session_index_get',
   };
 }
 
@@ -636,6 +684,282 @@ async function toolRefresh(args = {}) {
  * 只负责解析参数、组装源数据、格式化响应；渲染与 HTTP 都在 lib/stage.mjs。
  * 两步确认：不带 confirmToken 一律只预览，带对 token 才投递；永不写库。
  */
+// ---------------------------------------------------------------- 工具：未完成事项 / 接续包 / 体检
+
+/** 取一批会话（含记录），跳过同步来、本机没有分片的。 */
+function loadSessionsWithRecords({ limit = 20, app = 'all', workspace = '', since = 0 } = {}) {
+  const meta = freshMeta();
+  const rows = filterByApp(Object.values(meta.sessions), app)
+    .filter((s) => (s.updatedAt || 0) >= since)
+    .filter((s) => (workspace ? matchesWorkspace(s.workspace, workspace) : true))
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, clamp(limit, 1, 80, 20));
+  const cardsDoc = freshCards();
+  return rows.map((s) => ({
+    card: cardsDoc.cards?.[s.id] || {
+      id: s.id, title: s.title, app: appOf(s), workspace: s.workspace,
+      updatedAt: s.updatedAt, recordCount: s.records,
+    },
+    records: getRecords(s),
+  }));
+}
+
+/**
+ * 跨会话「未完成事项」聚合。
+ * 从会话记录里按语气抽取 TODO/待办/下一步/还没… 并去重，按项目分组。
+ */
+function toolTodos(args = {}) {
+  const limit = clamp(args.limit, 1, 80, 20);
+  const perSession = clamp(args.perSession, 1, 20, 4);
+  const since = Number(args.since) || 0;
+  const sessions = loadSessionsWithRecords({
+    limit, app: args.app || 'all', workspace: args.workspace || '', since,
+  });
+  if (sessions.length === 0) fail('没有可扫描的会话，先用 session_index_list 看看');
+  const payload = aggregateOpenItems({ sessions, perSession, limit: clamp(args.maxItems, 1, 200, 40) });
+  return {
+    ...payload,
+    scannedSessions: sessions.length,
+    scope: { app: args.app || 'all', workspace: args.workspace || '', since: since || undefined, limit },
+    hint: payload.total === 0
+      ? '最近这些会话里没抽到未完成事项（也可能已经做完了）。可以放大 limit 或指定 workspace 再试'
+      : '纯规则抽取，可能含「方案里提到的步骤」。要看上下文用 session_index_get 按 sessionId+seq 取原文',
+  };
+}
+
+/**
+ * 「接续包」：给一个会话或主题，产出一段可直接粘进新会话的上下文。
+ * 面向「接着上次继续干」，所以顺序是：目标 → 结论 → 未完成 → 涉及文件 → 关键词。
+ */
+function toolResume(args = {}) {
+  const cardsDoc = freshCards();
+  const maxChars = clamp(args.maxChars, 800, 20000, 4000);
+  const query = typeof args.query === 'string' ? args.query.trim() : '';
+  const sessionId = typeof args.sessionId === 'string' ? args.sessionId.trim() : '';
+  const workspace = typeof args.workspace === 'string' ? args.workspace : '';
+
+  let picked = [];
+  if (sessionId) {
+    const id = resolveCardId(cardsDoc, sessionId);
+    const card = cardsDoc.cards[id];
+    if (!card) fail(`没有这张卡：${sessionId}`);
+    picked = [card];
+  } else if (query) {
+    const scoped = filteredCardsDoc(cardsDoc, args.app || 'all');
+    picked = matchQuery(scoped, query, { limit: clamp(args.limit, 1, 10, 3), workspace })
+      .map((r) => r.card);
+    if (picked.length === 0) fail(`没有与「${query}」相关的会话`);
+  } else {
+    const scoped = filteredCardsDoc(cardsDoc, args.app || 'all');
+    picked = Object.values(scoped.cards)
+      .filter((c) => (workspace ? matchesWorkspace(c.workspace, workspace) : true))
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+      .slice(0, 1);
+    if (picked.length === 0) fail('索引里还没有会话卡');
+  }
+
+  const block = [];
+  const sections = [];
+  let used = 0;
+  const push = (line) => {
+    if (used + line.length > maxChars) return false;
+    block.push(line);
+    used += line.length + 1;
+    return true;
+  };
+
+  push(`# 接续上下文（${new Date().toISOString().slice(0, 16).replace('T', ' ')}）`);
+  push('');
+  for (const card of picked) {
+    const project = projectOf(card.workspace) || '(未记录)';
+    push(`## ${card.title || card.id}`);
+    push(`- 会话：\`${card.id}\` · ${appOf(card)} · 项目 ${project} · 更新于 ${new Date(card.updatedAt || 0).toISOString().slice(0, 16).replace('T', ' ')}`);
+    const lines = [];
+    const questions = (card.questions || []).slice(0, 3);
+    if (questions.length) {
+      push('- 目标：');
+      for (const q of questions) { if (push(`  - ${String(q).slice(0, 200)}`)) lines.push('goal'); }
+    }
+    const decisions = (card.decisions || []).slice(0, 6);
+    if (decisions.length) {
+      push('- 已有结论：');
+      for (const d of decisions) { if (push(`  - ${String(d).slice(0, 220)}`)) lines.push('decision'); }
+    }
+    // 未完成事项：只对这个会话读一次记录
+    let open = [];
+    try {
+      const meta = freshMeta();
+      const s = meta.sessions[card.id];
+      if (s) open = extractOpenItems(getRecords(s)).slice(0, 5);
+    } catch { /* 没有分片（同步来的）就跳过 */ }
+    if (open.length) {
+      push('- 未完成 / 待跟进：');
+      for (const item of open) { if (push(`  - [${item.kind}] ${item.text}（seq ${item.seq}）`)) lines.push('open'); }
+    }
+    const paths = (card.paths || []).slice(0, 8);
+    if (paths.length) {
+      push('- 涉及路径：');
+      for (const p of paths) { if (push(`  - \`${p}\``)) lines.push('path'); }
+    }
+    const keywords = (card.keywords || []).slice(0, 8);
+    if (keywords.length) { if (push(`- 关键词：${keywords.join('、')}`)) lines.push('keywords'); }
+    push('');
+    sections.push({
+      sessionId: card.id,
+      title: card.title || '',
+      project,
+      hasOpenItems: open.length > 0,
+      openItems: open.map((o) => ({ text: o.text, seq: o.seq, kind: o.kind })),
+      included: [...new Set(lines)],
+    });
+  }
+
+  // 相关记忆也带上：这些是跨会话层面已经确认过的事实
+  const memories = query || sessionId
+    ? queryNotes(freshNotes(), { query: query || picked.map((c) => c.title).join(' '), limit: 5 })
+    : [];
+  if (memories.length) {
+    push('## 已记下的相关事实');
+    for (const m of memories) push(`- [${m.note.type}] ${String(m.note.text).slice(0, 200)}`);
+  }
+
+  return {
+    ok: true,
+    sessions: sections,
+    memories: memories.map((m) => ({ id: m.note.id, type: m.note.type, text: m.note.text })),
+    chars: block.join('\n').length,
+    truncated: used >= maxChars,
+    context: block.join('\n'),
+    hint: '把 context 原样贴进新会话即可接着干。要更细的原文用 session_index_get（sessionId + seqs）',
+  };
+}
+
+/**
+ * 索引体检：meta / 分片 / 卡片三者一致性 + 体积 + 自动维护状态。
+ * fix=true 时只清**确定安全**的东西：过期临时文件、孤儿分片、堆积的 notes 备份。
+ */
+function toolDoctor(args = {}) {
+  const fix = Boolean(args.fix);
+  const meta = freshMeta();
+  const cardsDoc = freshCards();
+  const problems = [];
+  const fixes = [];
+  const sessions = meta.sessions || {};
+  const cards = cardsDoc.cards || {};
+
+  // 1) 分片：meta 声明的文件是否存在、能否解压、大小是否合理
+  let missingShards = 0;
+  let emptyShards = 0;
+  const referenced = new Set();
+  for (const [id, s] of Object.entries(sessions)) {
+    if (!s.file) { problems.push({ level: 'warn', code: 'META_NO_FILE', message: `会话 ${id} 的 meta 缺少 file 字段` }); continue; }
+    referenced.add(s.file);
+    const full = path.join(indexDir, s.file);
+    if (!fs.existsSync(full)) { missingShards += 1; continue; }
+    try {
+      const st = fs.statSync(full);
+      if (st.size <= 32) emptyShards += 1;
+    } catch { missingShards += 1; }
+  }
+  if (missingShards) problems.push({ level: 'error', code: 'SHARD_MISSING', message: `${missingShards} 个会话的分片文件不存在（索引需重建）` });
+  if (emptyShards) problems.push({ level: 'warn', code: 'SHARD_EMPTY', message: `${emptyShards} 个分片是空的（会话可能还没有内容）` });
+
+  // 2) 孤儿分片：磁盘上有、meta 里没有（可能是重建中途留下的）
+  let orphanShards = [];
+  try {
+    orphanShards = fs.readdirSync(indexDir)
+      .filter((f) => f.endsWith('.jsonl.gz') && !referenced.has(f));
+  } catch { /* 目录读不了就当没有 */ }
+  if (orphanShards.length) {
+    problems.push({
+      level: 'warn', code: 'SHARD_ORPHAN',
+      message: `${orphanShards.length} 个分片没有被 meta 引用（多为重建中断的残留）`,
+      files: orphanShards.slice(0, 8),
+    });
+  }
+
+  // 3) 卡片与 meta 的覆盖关系
+  const cardIds = Object.keys(cards);
+  const metaIds = Object.keys(sessions);
+  const importedCards = cardIds.filter((id) => !sessions[id]);
+  const noCard = metaIds.filter((id) => !cards[id]);
+  if (noCard.length) problems.push({ level: 'warn', code: 'CARD_MISSING', message: `${noCard.length} 个会话还没有会话卡（索引重建中或抽取失败）` });
+  const importedNote = importedCards.length
+    ? { level: 'info', code: 'CARD_IMPORTED', message: `${importedCards.length} 张卡片是从别的机器同步来的（本机无原文，get 只返回卡片）` }
+    : null;
+
+  // 4) 临时文件 / 备份堆积（这台机器曾堆过 170 个 notes 备份）
+  let tmpFiles = [];
+  let noteBackups = [];
+  try {
+    const names = fs.readdirSync(indexDir);
+    tmpFiles = names.filter((f) => /\.tmp-\d+$/.test(f));
+    noteBackups = names.filter((f) => /^notes\.json\.bak-/.test(f));
+  } catch { /* 忽略 */ }
+  if (tmpFiles.length) problems.push({ level: 'warn', code: 'TMP_LEFTOVER', message: `${tmpFiles.length} 个 .tmp-* 残留（写盘中断）`, files: tmpFiles.slice(0, 8) });
+  if (noteBackups.length > 20) {
+    problems.push({ level: 'info', code: 'BACKUP_PILE', message: `${noteBackups.length} 个 notes 备份堆积（每次写记忆都会留一份）` });
+  }
+
+  // 5) 体积与最大分片
+  const sizes = [];
+  for (const f of Object.keys(referenced)) {
+    try { sizes.push({ file: f, bytes: fs.statSync(path.join(indexDir, f)).size }); } catch { /* 忽略 */ }
+  }
+  sizes.sort((a, b) => b.bytes - a.bytes);
+  const totalBytes = indexSizeBytes(indexDir);
+
+  // 6) 自动维护状态
+  const autoState = auto.snapshot();
+  if (autoState.lastError) problems.push({ level: 'error', code: 'AUTO_ERROR', message: `自动维护上次失败：${autoState.lastError}` });
+  if (!autoState.enabled) problems.push({ level: 'info', code: 'AUTO_OFF', message: '后台自动维护已关闭（SESSION_INDEX_AUTO=0），新会话需手动 refresh' });
+
+  if (fix) {
+    const olderThan = Date.now() - 60 * 60 * 1000; // 只清 1 小时前的，避免误删正在写的
+    for (const f of tmpFiles) {
+      try {
+        const full = path.join(indexDir, f);
+        if (fs.statSync(full).mtimeMs < olderThan) { fs.unlinkSync(full); fixes.push(`删除临时文件 ${f}`); }
+      } catch { /* 忽略 */ }
+    }
+    for (const f of orphanShards) {
+      try {
+        const full = path.join(indexDir, f);
+        if (fs.statSync(full).mtimeMs < olderThan) { fs.unlinkSync(full); fixes.push(`删除孤儿分片 ${f}`); }
+      } catch { /* 忽略 */ }
+    }
+    // notes 备份只留最近 5 份
+    noteBackups.sort().reverse();
+    for (const f of noteBackups.slice(5)) {
+      try { fs.unlinkSync(path.join(indexDir, f)); fixes.push(`清理旧备份 ${f}`); } catch { /* 忽略 */ }
+    }
+  }
+
+  const healthy = problems.filter((p) => p.level === 'error').length === 0;
+  return {
+    ok: true,
+    healthy,
+    indexDir,
+    counts: {
+      sessions: metaIds.length,
+      cards: cardIds.length,
+      importedCards: importedCards.length,
+      missingShards,
+      orphanShards: orphanShards.length,
+      totalBytes,
+    },
+    builtAt: meta.builtAt || null,
+    largestShards: sizes.slice(0, 5),
+    autoIndex: autoState,
+    problems,
+    importedNote,
+    fixes: fix ? fixes : undefined,
+    hint: healthy
+      ? (problems.length ? '索引可用，只有提示级问题；需要清理就带 fix: true 再调一次' : '索引健康')
+      : '存在错误级问题：先跑 session_index_refresh {force:true} 重建，仍不行就删掉 ~/.dsh/session-index 让它自动重建',
+  };
+}
+
 async function toolStage(args = {}) {
   const cfg = stageConfig();
   if (!cfg.enabled) {
@@ -733,6 +1057,18 @@ async function toolStage(args = {}) {
 
   // 第二步：令牌必须匹配（防止预览 A、投递 B）
   if (String(args.confirmToken) !== token) {
+    // 失配有两种原因：参数被改过（该拒绝），或者**索引在这几秒里自动刷新了**
+    // （会话还在写，卡片/命中变了）。后者很常见，而这时队列里往往已经有同一篇 ——
+    // 那就直接告诉人「已入队、没重复投递」，而不是甩一个 TOKEN_MISMATCH 让人反复重试。
+    let dupOnMismatch = null;
+    try { dupOnMismatch = await findDuplicate(cfg, doc); } catch { /* 桥不可达就照常拒绝 */ }
+    if (dupOnMismatch) {
+      return {
+        ok: true, staged: false, alreadyQueued: true, id: dupOnMismatch.id,
+        title: doc.title, chars: doc.chars, tokenMismatch: true,
+        hint: '令牌失配（索引刚刷新），但待入库队列里已有同标题同字数的稿，未重复投递',
+      };
+    }
     return {
       ok: false, code: 'TOKEN_MISMATCH', staged: false,
       error: '确认令牌与当前内容不一致，已拒绝投递',
@@ -769,6 +1105,9 @@ const HANDLERS = {
   session_index_package: toolPackage,
   session_index_vectors: toolVectors,
   session_index_refresh: toolRefresh,
+  session_index_todos: toolTodos,
+  session_index_resume: toolResume,
+  session_index_doctor: toolDoctor,
   session_index_stage: toolStage,
 };
 
@@ -828,6 +1167,9 @@ const TOOLS = [
   { name: 'session_index_forget', description: '【归档/删除记忆】默认归档可恢复，purge=true 才物理删除。', inputSchema: { type: 'object', properties: { id: { type: 'string', description: '必需' }, purge: { type: 'boolean' } }, required: ['id'], additionalProperties: false } },
   { name: 'session_index_package', description: '【自动打包】无需手工压缩，一键生成可分发 zip。mode=plugin 打完整插件包，skill 打技能包（可直接导入 DSH 技能管理器），all 两种都打，status 查看已生成包。包内自动附 MANIFEST.json 与 INSTALL.md，且排除所有会话数据/索引/密钥。', inputSchema: { type: 'object', properties: { mode: { type: 'string', description: 'plugin / skill / all(默认) / status' } }, additionalProperties: false } },
   { name: 'session_index_vectors', description: '【可选向量层】查看/同步/查询向量缓存。未配置 SESSION_INDEX_EMBED_* 时本地语义检索照常工作且零成本。', inputSchema: { type: 'object', properties: { action: { type: 'string', description: 'status/sync/search' }, query: { type: 'string' }, limit: { type: 'number' } }, additionalProperties: false } },
+  { name: 'session_index_todos', description: '【跨会话未完成事项】扫最近的会话记录，抽出 TODO / 待办 / 下一步 / 还没做 / 待验证 这类没做完的事（排除「已完成」语气），按项目分组并附会话与 seq。回答「我还有什么没做完」。', inputSchema: { type: 'object', properties: { limit: { type: 'number', description: '扫多少个最近会话，默认 20' }, perSession: { type: 'number', description: '每个会话最多取几条，默认 4' }, maxItems: { type: 'number', description: '总计上限，默认 40' }, app: { type: 'string' }, workspace: { type: 'string' }, since: { type: 'number' } }, additionalProperties: false } },
+  { name: 'session_index_resume', description: '【接续包】给会话 id 或主题，产出一段可直接粘进新会话的上下文（目标 / 已有结论 / 未完成 / 涉及路径 / 关键词 / 相关记忆）。比 brief 更能直接接着干活。', inputSchema: { type: 'object', properties: { sessionId: { type: 'string', description: '会话 id，支持前缀' }, query: { type: 'string', description: '按主题挑最相关的 1~3 个会话' }, app: { type: 'string' }, workspace: { type: 'string' }, limit: { type: 'number' }, maxChars: { type: 'number' } }, additionalProperties: false } },
+  { name: 'session_index_doctor', description: '【索引体检】检查 meta / 分片 / 卡片三者一致性、孤儿分片、空分片、临时残留、备份堆积、体积与自动维护状态。fix=true 只清确定安全的东西（1 小时前的临时文件与孤儿分片、只留最近 5 份 notes 备份）。', inputSchema: { type: 'object', properties: { fix: { type: 'boolean' } }, additionalProperties: false } },
   { name: 'session_index_refresh', description: '手动立即刷新索引。注意：新会话已由文件事件自动识别，通常无需调用；仅改抽取规则或需即时生效时用。', inputSchema: { type: 'object', properties: { force: { type: 'boolean' } }, additionalProperties: false } },
   { name: 'session_index_stage', description: '【会话整理 → 思源桥待入库】把会话卡/结论/检索片段整理成 Markdown 文档。两步确认：不带 confirmToken 只返回预览与令牌，原样回传 confirmWith 才投递到思源桥 /api/stage；绝不自动写入思源笔记库。支持指定会话、主题、模板、落点与去重。status=true 只读探测服务与队列。', inputSchema: { type: 'object', properties: { status: { type: 'boolean', description: '只读：探测思源桥服务与待入库队列' }, query: { type: 'string', description: '主题词，按主题聚合会话' }, sessionIds: { type: 'array', items: { type: 'string' }, description: '指定会话 id（支持前缀），不传则按最近/主题取' }, app: { type: 'string', description: 'dsh / workbuddy / all' }, workspace: { type: 'string' }, since: { type: 'number' }, until: { type: 'number' }, template: { type: 'string', description: 'brief(默认) / decisions / detail' }, title: { type: 'string', description: '自定义文档标题；确认时请回传预览给出的 title' }, notebook: { type: 'string' }, hpath: { type: 'string', description: '目标目录，默认 /会话札记/思源' }, note: { type: 'string' }, limit: { type: 'number' }, maxChars: { type: 'number' }, confirmToken: { type: 'string', description: '预览返回的令牌；带上且匹配才真正投递' } }, additionalProperties: false } },
 ];
