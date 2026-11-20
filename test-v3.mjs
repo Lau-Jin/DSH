@@ -91,6 +91,16 @@ function check(name, ok, extra) {
   check('代码块里的「还没」不算待办', !noisy.some((x) => /还没实现/.test(x.text)));
   check('「明白，…」这类应答叙述不算待办', !noisy.some((x) => /发布工具收进仓/.test(x.text)));
 
+  // 引号里的界面名不算待办信号：「现在做面板「待办」页签」是计划陈述，不是待办
+  const quoted = todos.extractOpenItems([
+    rec(1, '现在做面板「待办」页签（①）：先加 HTTP 接口与 panel-api：'),
+    rec(2, '现在面板加「会话 / 待办」页签：'),
+    rec(3, '下一步要补齐 nacos 的配置模板，还没做。'),
+  ]);
+  check('引号里的「待办」不当作待办信号',
+    !quoted.some((x) => /页签/.test(x.text)) && quoted.some((x) => /nacos/.test(x.text)),
+    quoted.map((x) => x.text.slice(0, 24)).join(' | '));
+
   const agg = todos.aggregateOpenItems({
     sessions: [
       { card: { id: 's1', title: '甲', workspace: 'D:\\p\\DSH', app: 'dsh', updatedAt: 10 }, records: [rec(1, '待办：补单元测试')] },

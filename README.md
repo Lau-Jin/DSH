@@ -5,7 +5,8 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v3.1.0** | **未完成事项落进卡片**（③）：`buildCard` 建卡时就把 `openItems`（最多 5 条）与 `openCount` 写进会话卡，`todos` 与面板「待办」直接读卡片、**0 解压成本**（实测 72 卡 1ms，原先现读记录约 130ms/14 会话）；老卡没有该字段时自动回落读记录，并计入 `missingPersisted` 提示跑一次全量重建。**面板新增「待办」页签**（①）：按项目分组列出未完成事项，点一条直接跳到来源会话；数据走 `GET /api/todos`（只读卡片）。**`resume` 支持一键投递**（②）：`stage: true` 把接续包/未完成事项投到思源桥「待入库」，只入队、写入仍由人在界面确认。`todos` 新增 `refresh` 参数（现读记录重算）。测试：panel 94→97、v3 33→40、smoke 100→104。 |
+| 版本 | **v3.1.1** | 未完成事项抽取去误判：**引号里的文字不再参与语气判定** —— 「现在做面板「待办」页签」这类计划陈述里的「待办」只是被引用的界面名，此前会被当成待办（实测真实索引里有 2 条这样的假阳性）。用真实索引重建后 71 条待办里这类消失。`test-v3` 33 → 41。 |
+| **v3.1.0** | **未完成事项落进卡片**（③）：`buildCard` 建卡时就把 `openItems`（最多 5 条）与 `openCount` 写进会话卡，`todos` 与面板「待办」直接读卡片、**0 解压成本**（实测 72 卡 1ms，原先现读记录约 130ms/14 会话）；老卡没有该字段时自动回落读记录，并计入 `missingPersisted` 提示跑一次全量重建。**面板新增「待办」页签**（①）：按项目分组列出未完成事项，点一条直接跳到来源会话；数据走 `GET /api/todos`（只读卡片）。**`resume` 支持一键投递**（②）：`stage: true` 把接续包/未完成事项投到思源桥「待入库」，只入队、写入仍由人在界面确认。`todos` 新增 `refresh` 参数（现读记录重算）。测试：panel 94→97、v3 33→40、smoke 100→104。 |
 | **v3.0.1** | 文档补齐：操作手册第 9 章把 `todos` / `resume` / `doctor` 三个工具补进「工具全参考」表（此前只改了标题里的数字）；第 7 章新增「按会话聚合」与「工作区归一化」两节；第 11 章新增三个典型场景；通用约定补两条。README 面板章节补过滤条 / 项目分组 / 搜索历史 / 键盘操作。代码零改动。 |
 | **v3.0.0** | **三块新能力 + 两个体验改造**。新工具：`session_index_todos`（跨会话未完成事项聚合 —— 只认对话正文、跳过工具记录与代码块、排除「已完成」语气、跨会话去重并记 `alsoInSessions`）、`session_index_resume`（接续包：目标/结论/未完成/路径/关键词/记忆一段给全）、`session_index_doctor`（索引体检：meta/分片/卡片一致性、孤儿分片、备份堆积，`fix:true` 只清安全项）。体验：检索**默认按会话聚合**（每会话一条代表 + `moreSeqs`，省 token；`group:false` 退回逐条）；**工作区归一化**（同一项目的盘符/斜杠/WorkBuddy 编码目录/父子目录都算同项目，过滤只写项目名即可，面板按项目分组）。面板新增应用/项目/时间段过滤、搜索历史（↑↓ 调出）、键盘导航（j/k、Enter、Esc）、条目高亮。工具数 14 → **17**。新增 `test-v3.mjs` 33 项。 |
 | **v2.9.3** | **测试不再污染真实索引**：`test-panel` 先把真实索引的卡文件拷进临时目录、并把 `SESSION_INDEX_DIR` 指过去，再 import 宿主半身 —— 之前跑一次测试就会把**正在运行的 DSH 的 `server-path.txt`** 改成源码路径（门禁因此 FAIL，MCP 还可能被指回源码目录）。冒烟起的临时 server 也关掉面板 HTTP 通道（`SESSION_INDEX_HTTP_PORT=0`），不再和活实例抢 8799、不再把 `http-url.txt` 写成会失效的端口。README 新增「面板失效怎么查」三份日志速查表。 |
@@ -233,7 +234,7 @@ HTTP 通道把这三层依赖全部去掉，而且**和 agent 用的是同一份
 ### 手工验证（不用开面板）
 
 ```bash
-curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"3.1.0"}
+curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"3.1.1"}
 curl "http://127.0.0.1:8799/api/list?limit=3"
 curl "http://127.0.0.1:8799/api/search?q=%E6%8F%92%E4%BB%B6"
 curl "http://127.0.0.1:8799/api/card?id=<会话id>"
@@ -259,7 +260,7 @@ curl "http://127.0.0.1:8799/api/card?id=<会话id>"
 | `http-access.log` | 面板**到底请求了什么**、Origin 是什么、拿到什么状态码 | 有 `/api/list` 且 `status=200` → 服务端没问题；**没有它** → 请求没发出去或被探活超时掐了；`status=403` → 被跨源策略挡了（看 `origin=` 值） |
 | `host-half.log` | 宿主半身有没有加载、命令有没有注册 | 没有 `apply` 行 = 那一行压根没被 DSH 加载；有 `apply` 没 `command registered` = `commands` 服务没就位 |
 
-**一个已修的典型根因（v3.1.0）**：同步模块用 `execFileSync` 跑 git → **阻塞整个 MCP 进程**，
+**一个已修的典型根因（v3.1.1）**：同步模块用 `execFileSync` 跑 git → **阻塞整个 MCP 进程**，
 面板探活（`/api/health`）超时 → 报「没有找到本地服务」→ 面板空白。
 特征是 `http-access.log` 里**面板的 health 请求被排到几秒之后才记录**（排队等 git 结束）。
 现在 git 全异步，慢远端在后台跑，面板 6ms 内就有响应。
@@ -477,8 +478,8 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 npm registry 来源**（2026-11-18 v3.1.0 发布后切回）：profile 依赖是
-`"dsh-session-index-lau": "^3.1.0"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
+**本机当前是 npm registry 来源**（2026-11-18 v3.1.1 发布后切回）：profile 依赖是
+`"dsh-session-index-lau": "^3.1.1"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
 以后发新版后**点更新即可，不需要卸载重装**；命令行 `pnpm update dsh-session-index-lau` 与点按钮同一条路。
 
 > ⚠ 切回 npm 后，改本机代码**不再即时生效**：要走「改仓库 → 发布 npm → 插件页更新 →
@@ -537,8 +538,8 @@ node smoke.mjs                   # 端到端自测（含标准形态断言）
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v3.1.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
-| `dist/session-index-skill-v3.1.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v3.1.1.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
+| `dist/session-index-skill-v3.1.1.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可调 MCP 工具 `session_index_package` 触发打包。

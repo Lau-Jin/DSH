@@ -31,7 +31,7 @@ import { pack, packAll, listPacks } from './lib/pack.mjs';
 import { stageConfig, buildStageDocument, stageToken, bridgeOverview, findDuplicate, postStage, StageError } from './lib/stage.mjs';
 
 const { sessionsRoot, indexDir, workbuddyProjectsDir } = defaultPaths();
-const VERSION = '3.1.0';
+const VERSION = '3.1.1';
 const SUPPORTED_PROTOCOLS = new Set(['2024-11-05', '2025-03-26', '2025-06-18']);
 const log = (...parts) => process.stderr.write(`[dsh-session-index] ${parts.join(' ')}\n`);
 

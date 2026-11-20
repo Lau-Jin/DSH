@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-index",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "icon": "icon.svg",
   "displayName": {
     "zh": "全会话索引与跨会话记忆",
@@ -131,8 +131,8 @@
   },
   "packages": {
     "directory": "dist",
-    "plugin": "dsh-session-index-v3.1.0.zip",
-    "skill": "session-index-skill-v3.1.0.zip",
+    "plugin": "dsh-session-index-v3.1.1.zip",
+    "skill": "session-index-skill-v3.1.1.zip",
     "generator": "lib/pack.mjs (zero dependency ZIP writer)",
     "contents": [
       "MANIFEST.json",
