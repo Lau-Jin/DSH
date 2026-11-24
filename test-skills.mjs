@@ -102,6 +102,24 @@ try {
   const missing = await skills.importSkill({ source: path.join(work, 'nope'), targetRoot: target });
   check('路径不存在时给明确错误', missing.ok === false && /不存在/.test(missing.error || ''), missing.error);
 
+  /* ------------------------------------------------------------ 自定义根（环境变量） */
+  const customRoot = path.join(work, 'custom');
+  fs.mkdirSync(path.join(customRoot, 'gamma2'), { recursive: true });
+  fs.writeFileSync(path.join(customRoot, 'gamma2', 'SKILL.md'), skillMd('gamma2', '自定义根里的技能'));
+  const prevEnv = process.env.SESSION_INDEX_SKILL_ROOTS;
+  process.env.SESSION_INDEX_SKILL_ROOTS = customRoot;
+  try {
+    const withCustom = skills.listSkills();
+    check('环境变量追加的根会被发现',
+      withCustom.skills.some((s) => s.name === 'gamma2'),
+      withCustom.roots.filter((r) => r.kind === 'custom').map((r) => r.path).join(','));
+    check('自定义根的技能也能被检索到',
+      skills.searchSkills({ query: '自定义根里的技能', limit: 5 }).total >= 1);
+  } finally {
+    if (prevEnv === undefined) delete process.env.SESSION_INDEX_SKILL_ROOTS;
+    else process.env.SESSION_INDEX_SKILL_ROOTS = prevEnv;
+  }
+
   /* ------------------------------------------------------------ 清单落盘 */
   const idxDir = path.join(work, 'index');
   fs.mkdirSync(idxDir, { recursive: true });

@@ -5,7 +5,8 @@
 
 | 项目 | 值 |
 |---|---|
-| 版本 | **v3.2.0** | **技能文件检索**（新工具 `session_index_skills`，工具数 17 → **18**）：这台机器的技能散在多个根里（同一份 `debug-helper` 同时在 `.dsh/skills`/`.agents/skills`/`.codebuddy/skills`），现在**合并成一份清单**（同名只留一条，标出全部来源根与主副本）；可在**技能文件**（SKILL.md + references/*.md）里做文件级检索（带文件路径与行号）；可从**目录或 zip 导入**技能到 DSH 技能根（同名默认不覆盖）。新增 `lib/skills.mjs`、`GET /api/skills`、`GET /api/skills/search`、`POST /api/skills/import`（写操作带 `X-Session-Index-Sync` 头防 CSRF），面板新增「技能」页签。合并后的清单落盘到索引目录 `skills.json`。新增 `test-skills.mjs` 23 项。 |
+| 版本 | **v3.2.1** | 技能检索的文档补齐 + 一处实测修正：HTTP 端到端发现「导到**自定义根**的技能不会出现在清单里」—— 因为自定义根本来就不在默认扫描范围；现在补上环境变量 `SESSION_INDEX_SKILL_ROOTS` 的用法说明与回归测试（`test-skills` 23 → 25）。README 与手册补齐扫描的技能根清单、导入的覆盖规则、以及 `session_index_skills` 的用法示例。代码行为不变（自定义根一直支持该环境变量）。 |
+| **v3.2.0** | **技能文件检索**（新工具 `session_index_skills`，工具数 17 → **18**）：这台机器的技能散在多个根里（同一份 `debug-helper` 同时在 `.dsh/skills`/`.agents/skills`/`.codebuddy/skills`），现在**合并成一份清单**（同名只留一条，标出全部来源根与主副本）；可在**技能文件**（SKILL.md + references/*.md）里做文件级检索（带文件路径与行号）；可从**目录或 zip 导入**技能到 DSH 技能根（同名默认不覆盖）。新增 `lib/skills.mjs`、`GET /api/skills`、`GET /api/skills/search`、`POST /api/skills/import`（写操作带 `X-Session-Index-Sync` 头防 CSRF），面板新增「技能」页签。合并后的清单落盘到索引目录 `skills.json`。新增 `test-skills.mjs` 23 项。 |
 | **v3.1.1** | 未完成事项抽取去误判：**引号里的文字不再参与语气判定** —— 「现在做面板「待办」页签」这类计划陈述里的「待办」只是被引用的界面名，此前会被当成待办（实测真实索引里有 2 条这样的假阳性）。用真实索引重建后 71 条待办里这类消失。`test-v3` 33 → 41。 |
 | **v3.1.0** | **未完成事项落进卡片**（③）：`buildCard` 建卡时就把 `openItems`（最多 5 条）与 `openCount` 写进会话卡，`todos` 与面板「待办」直接读卡片、**0 解压成本**（实测 72 卡 1ms，原先现读记录约 130ms/14 会话）；老卡没有该字段时自动回落读记录，并计入 `missingPersisted` 提示跑一次全量重建。**面板新增「待办」页签**（①）：按项目分组列出未完成事项，点一条直接跳到来源会话；数据走 `GET /api/todos`（只读卡片）。**`resume` 支持一键投递**（②）：`stage: true` 把接续包/未完成事项投到思源桥「待入库」，只入队、写入仍由人在界面确认。`todos` 新增 `refresh` 参数（现读记录重算）。测试：panel 94→97、v3 33→40、smoke 100→104。 |
 | **v3.0.1** | 文档补齐：操作手册第 9 章把 `todos` / `resume` / `doctor` 三个工具补进「工具全参考」表（此前只改了标题里的数字）；第 7 章新增「按会话聚合」与「工作区归一化」两节；第 11 章新增三个典型场景；通用约定补两条。README 面板章节补过滤条 / 项目分组 / 搜索历史 / 键盘操作。代码零改动。 |
@@ -173,8 +174,7 @@ DSH 插件页装任何东西，底层都是一次 `pnpm install`。装不上时�
 | `session_index_forget` | 归档或删除记忆（默认归档） |
 | **`session_index_todos`** | **我还有什么没做完**：默认读**卡片里预抽好的 `openItems`**（0 解压），`refresh: true` 现读记录重算；排除「已完成」语气、跳过工具记录与代码块，按项目分组并带 `sessionId + seq` |
 | **`session_index_resume`** | **接续包**：给会话 id 或主题，产出一段可直接粘进新会话的上下文（目标 / 已有结论 / 未完成 / 涉及路径 / 关键词 / 相关记忆）；`stage: true` 一并投到思源桥待入库 |
-| **`session_index_skills`** | **技能文件检索**：查看这台机器上有哪些 skill（**多个技能根合并成一份清单**，同名只留一条并标出所有来源根）、在技能文件（SKILL.md + references/*.md）里做文件级检索、从目录或 zip **导入**技能到 DSH 技能根 |
-| **`session_index_doctor`** | **索引体检**：meta / 分片 / 卡片一致性、孤儿分片、空分片、临时残留、备份堆积、体积、自动维护状态；`fix:true` 只清安全项 |
+| **`session_index_skills`** | **技能文件检索**：查看这台机器上有哪些 skill（**多个技能根合并成一份清单**，同名只留一条并标出所有来源根）、在技能文件（SKILL.md + references/*.md）里做文件级检索、从目录或 zip **导入**技能到 DSH 技能根 || **`session_index_doctor`** | **索引体检**：meta / 分片 / 卡片一致性、孤儿分片、空分片、临时残留、备份堆积、体积、自动维护状态；`fix:true` 只清安全项 |
 | `session_index_refresh` | 手动增量刷新 |
 | `session_index_package` | 重新生成分发包 |
 | `session_index_vectors` | 可选的向量索引管理 |
@@ -217,6 +217,17 @@ WorkBuddy 的 `d-WorkBuddy工作区-Tool开发-DSH` 编码目录、以及父/子
 
 可选值与计数由 `GET /api/facets` 一次给出（应用 / 项目 / 时间段），前端不用自己统计。
 
+**「技能」页签（v3.2）**：这台机器的技能散在多个根里（同一份 `debug-helper` 同时在
+`~/.dsh/skills`、`~/.agents/skills`、`~/.codebuddy/skills`，还可能是符号链接），
+所以面板把它们**合并成一份清单**：同名只留一条，标注它出现在哪几个根、哪个是主副本。
+页签里可以直接**在技能文件里检索**（SKILL.md 与 `references/*.md` 全覆盖，命中带文件与行号），
+也可以从本机路径**导入**技能（目录或 `.zip`，同名默认不覆盖，要覆盖得显式 `overwrite`）。
+
+扫描的技能根：`~/.dsh/skills` → `~/.agents/skills` → `~/.codebuddy/skills` → `~/.claude/skills`
+→ `~/.codex/skills` → `~/.cursor/skills`，外加当前工作区里的 `.dsh/skills`、`.agents/skills` 等项目根；
+用环境变量 `SESSION_INDEX_SKILL_ROOTS`（`;` 或 `,` 分隔）可以**追加**自己的根 ——
+导到自定义根的技能，记得把这个根也加进去，否则面板看不到它。
+
 ### 两条数据通道（面板自己选，优先 HTTP）
 
 | 通道 | 谁提供 | 什么时候用 | 依赖 |
@@ -236,7 +247,7 @@ HTTP 通道把这三层依赖全部去掉，而且**和 agent 用的是同一份
 ### 手工验证（不用开面板）
 
 ```bash
-curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"3.2.0"}
+curl http://127.0.0.1:8799/api/health        # 应返回 {"ok":true,"service":"dsh-session-index","version":"3.2.1"}
 curl "http://127.0.0.1:8799/api/list?limit=3"
 curl "http://127.0.0.1:8799/api/search?q=%E6%8F%92%E4%BB%B6"
 curl "http://127.0.0.1:8799/api/card?id=<会话id>"
@@ -262,7 +273,7 @@ curl "http://127.0.0.1:8799/api/card?id=<会话id>"
 | `http-access.log` | 面板**到底请求了什么**、Origin 是什么、拿到什么状态码 | 有 `/api/list` 且 `status=200` → 服务端没问题；**没有它** → 请求没发出去或被探活超时掐了；`status=403` → 被跨源策略挡了（看 `origin=` 值） |
 | `host-half.log` | 宿主半身有没有加载、命令有没有注册 | 没有 `apply` 行 = 那一行压根没被 DSH 加载；有 `apply` 没 `command registered` = `commands` 服务没就位 |
 
-**一个已修的典型根因（v3.2.0）**：同步模块用 `execFileSync` 跑 git → **阻塞整个 MCP 进程**，
+**一个已修的典型根因（v3.2.1）**：同步模块用 `execFileSync` 跑 git → **阻塞整个 MCP 进程**，
 面板探活（`/api/health`）超时 → 报「没有找到本地服务」→ 面板空白。
 特征是 `http-access.log` 里**面板的 health 请求被排到几秒之后才记录**（排队等 git 结束）。
 现在 git 全异步，慢远端在后台跑，面板 6ms 内就有响应。
@@ -480,8 +491,8 @@ node tools/push-doc.mjs --from-workbuddy --seed         # 只记状态基线，�
 | 官方按需插件 | 有显式**更新**（版本或开发链接来源不同时） |
 | **本地路径 / `link:` / 压缩包安装的** | **不显示版本区块**，文档写明「通过卸载后重新安装升级」 |
 
-**本机当前是 npm registry 来源**（2026-11-18 v3.2.0 发布后切回）：profile 依赖是
-`"dsh-session-index-lau": "^3.2.0"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
+**本机当前是 npm registry 来源**（2026-11-18 v3.2.1 发布后切回）：profile 依赖是
+`"dsh-session-index-lau": "^3.2.1"`，属于上表第一行 —— 插件页**有「版本」区块与「更新」按钮**，
 以后发新版后**点更新即可，不需要卸载重装**；命令行 `pnpm update dsh-session-index-lau` 与点按钮同一条路。
 
 > ⚠ 切回 npm 后，改本机代码**不再即时生效**：要走「改仓库 → 发布 npm → 插件页更新 →
@@ -540,8 +551,8 @@ node smoke.mjs                   # 端到端自测（含标准形态断言）
 
 | 文件 | 内容 | 用途 |
 |---|---|---|
-| `dist/dsh-session-index-v3.2.0.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
-| `dist/session-index-skill-v3.2.0.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
+| `dist/dsh-session-index-v3.2.1.zip` | 全部源码 + 清单 + 文档 + 手册 + 脚本 + `MANIFEST.json` + `INSTALL.md` | 完整分发，按标准流程 `pnpm add` 安装 |
+| `dist/session-index-skill-v3.2.1.zip` | 根 `SKILL.md` + 说明 | 直接导入 DSH「MCP 与技能」 |
 
 包内**排除**：索引分片 `*.jsonl.gz`、`meta/cards/notes/vectors.json`、备份与临时文件、已有 zip。
 已验证包内无任何会话数据与密钥，可安全分发。也可调 MCP 工具 `session_index_package` 触发打包。
