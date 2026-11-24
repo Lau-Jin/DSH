@@ -6,7 +6,7 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 
 # 跨会话历史接入
 
-你有 `session_index_*` 系列 MCP 工具（共 **17 个**）。所有历史会话已预先建好索引，源会话文件是分帧 zstd 压缩，**不要直接去读 `~/.dsh/sessions` 下的 `.zstd` 文件**——那会重复消耗大量时间和 token。
+你有 `session_index_*` 系列 MCP 工具（共 **18 个**）。所有历史会话已预先建好索引，源会话文件是分帧 zstd 压缩，**不要直接去读 `~/.dsh/sessions` 下的 `.zstd` 文件**——那会重复消耗大量时间和 token。
 
 索引覆盖 DSH 与 WorkBuddy 两个应用的会话，`session_index_*` 的 `app` 参数可过滤 `dsh` / `workbuddy` / `all`。
 
@@ -32,6 +32,7 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 | 查看索引与自动维护状态 | `session_index_status` |
 | **我还有什么没做完 / 遗留事项** | **`session_index_todos`**（默认读卡片里预抽的 `openItems`，0 解压；`refresh: true` 现读记录重算） |
 | **接着上次继续干（要一段可直接粘的上下文）** | **`session_index_resume`**（目标/结论/未完成/涉及路径/关键词/相关记忆；`stage: true` 可一并投到思源桥待入库） |
+| **有哪些技能 / 技能里写了什么 / 导入新技能** | **`session_index_skills`**（`action: roots/list/search/import`；多个技能根会合并成一份清单） |
 | **索引是否健康 / 清掉孤儿与残留** | **`session_index_doctor`**（meta/分片/卡片一致性、孤儿分片、备份堆积；`fix:true` 只清安全项） |
 | 手动触发增量刷新 | `session_index_refresh` |
 | 重新生成分发包 | `session_index_package` |
@@ -60,7 +61,7 @@ whenToUse: 会话开始需要了解项目历史；用户提到「之前 / 上次
 
 1. DSH → **插件页** → 粘贴仓库地址 `https://github.com/Lau-Jin/DSH` → 安装 → **完全退出 DSH 再打开**（最小化不算）。
    或命令行：`cd ~/.dsh/profiles/desktop && pnpm add dsh-session-index-lau`。
-2. 装完自动发生三件事：包内 `cordis.patch.yml` 挂上 MCP stdio 客户端（本 Skill 的 17 个工具即可用）、
+2. 装完自动发生三件事：包内 `cordis.patch.yml` 挂上 MCP stdio 客户端（本 Skill 的 18 个工具即可用）、
    宿主半身把 `server.mjs` 路径写进 `server-path.txt`、本文件被自动装到 `%USERPROFILE%\.dsh/skills\session-index\SKILL.md`。
 3. 前置：Node ≥ 22.15（需要 `zlib.zstdDecompressSync`；插件页安装会自动挑 DSH 自带的 Node）。
 

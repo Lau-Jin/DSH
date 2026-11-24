@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-index",
-  "version": "3.1.1",
+  "version": "3.2.0",
   "private": true,
   "type": "module",
   "description": "完全化的 DSH + WorkBuddy 全会话 MCP 插件：装到 DSH 里即用（bundle 自动挂载，无需手工改配置）、自动建索引、文件事件驱动识别新会话、MCP 变更通知、自动打包插件与技能。零第三方依赖，源会话只读；侧栏还有「会话检索」面板，可搜索并翻看每次会话的结论与涉及路径。",
@@ -77,7 +77,8 @@
     "test:panel": "node test-panel.mjs",
     "test:sync": "node test-sync.mjs",
     "test:v3": "node test-v3.mjs",
-    "test": "node test-panel.mjs && node test-sync.mjs && node test-v3.mjs && node smoke.mjs"
+    "test:skills": "node test-skills.mjs",
+    "test": "node test-panel.mjs && node test-sync.mjs && node test-v3.mjs && node test-skills.mjs && node smoke.mjs"
   },
   "license": "MIT"
 }

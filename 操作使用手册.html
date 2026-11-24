@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>dsh-session-index 操作使用手册 v3.1.1</title>
+<title>dsh-session-index 操作使用手册 v3.2.0</title>
 <style>
   :root{
     --bg:#f7f9fc; --panel:#ffffff; --panel-2:#f1f5fb; --line:#e2e8f2;
@@ -74,7 +74,7 @@
 <body>
 <div class="layout">
 <aside>
-  <div class="brand">dsh-session-index<small>操作使用手册 · v3.1.1</small></div>
+  <div class="brand">dsh-session-index<small>操作使用手册 · v3.2.0</small></div>
   <input id="q" type="search" placeholder="筛选章节 / 关键词…" autocomplete="off">
   <nav id="nav">
     <div class="grp">开始</div>
@@ -88,7 +88,7 @@
     <a href="#s7">7. 语义检索</a>
     <a href="#s8">8. 自动注入上下文</a>
     <div class="grp">参考</div>
-    <a href="#s9">9. 17 个工具全参考</a>
+    <a href="#s9">9. 18 个工具全参考</a>
     <a href="#s10">10. Prompts / Resources</a>
     <a href="#s11">11. 典型场景操作</a>
     <a href="#s12">12. 配置与命令速查</a>
@@ -114,7 +114,7 @@
 
 <section id="s1" data-kw="概览 架构 是什么 数据流">
   <h2>1. 这是什么</h2>
-  <p>它是一个 <b>MCP (stdio) 插件</b>。DSH 通过内置 <code>dsh-mcp-client</code> 连接它，Agent 就能用 17 个工具查历史。bundle 由包内 <code>cordis.patch.yml</code> 自动挂载，装完即用，<b>不需要手工填表或改 YAML</b>，也不带任何安装脚本；<code>plugin.json</code> 是机器可读能力清单，<code>dist/*.zip</code> 是可分发包。</p>
+  <p>它是一个 <b>MCP (stdio) 插件</b>。DSH 通过内置 <code>dsh-mcp-client</code> 连接它，Agent 就能用 18 个工具查历史。bundle 由包内 <code>cordis.patch.yml</code> 自动挂载，装完即用，<b>不需要手工填表或改 YAML</b>，也不带任何安装脚本；<code>plugin.json</code> 是机器可读能力清单，<code>dist/*.zip</code> 是可分发包。</p>
 <pre><button class="copy">复制</button><code>DSH  ~/.dsh/sessions/**/session.v4.jsonl.zstd   (分帧 zstd)
 WorkBuddy  ~/.workbuddy/projects/&lt;工作区&gt;/&lt;会话id&gt;.jsonl
         │  fs.watch 事件 → 防抖 → 后台子进程增量构建
@@ -211,7 +211,7 @@ pnpm remove dsh-session-index-lau       # 卸载</code></pre>
   <h3>插件形态</h3>
   <table>
     <tr><th>文件 / 机制</th><th>作用</th></tr>
-    <tr><td><code>plugin.json</code></td><td>机器可读清单：17 工具、4 prompts、7 resources、自动化配置、包信息、安装方式、依赖与安全声明；也通过 <code>session-index://plugin.json</code> 暴露</td></tr>
+    <tr><td><code>plugin.json</code></td><td>机器可读清单：18 工具、4 prompts、7 resources、自动化配置、包信息、安装方式、依赖与安全声明；也通过 <code>session-index://plugin.json</code> 暴露</td></tr>
     <tr><td><code>package.json</code> 的 <code>dsh.bundle.patch</code></td><td><b>插件页安装的关键</b>：声明 <code>./cordis.patch.yml</code>，DSH 安装器据此接受本包并在启动时自动应用这层 patch</td></tr>
     <tr><td><code>cordis.patch.yml</code></td><td>bundle 层：insert 宿主行 + MCP 行；<code>command</code>/<code>args</code>/<code>DSH_HOME</code> 用 <code>!!js</code> 表达式在加载时求值，安装路径变化无需改文件</td></tr>
     <tr><td><code>lib/index.mjs</code></td><td>宿主半身：<code>import.meta.url</code> 是唯一 100% 可靠的安装路径来源，把 <code>server.mjs</code> 绝对路径写进 <code>server-path.txt</code>，供上面那行 MCP 配置使用；另注册 <code>session-index</code> 斜杠命令，并往 <code>host-half.log</code> 追加自诊断行</td></tr>
@@ -233,8 +233,8 @@ node pack.mjs verify         # 校验 zip 结构
 session_index_package { "mode": "all" }   # MCP 工具，Agent 也能触发</code></pre>
   <table>
     <tr><th>包</th><th>内容</th><th>用途</th></tr>
-    <tr><td><code>dsh-session-index-v3.1.1.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
-    <tr><td><code>session-index-skill-v3.1.1.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
+    <tr><td><code>dsh-session-index-v3.2.0.zip</code></td><td>全部源码 + plugin.json + README + 手册 + SKILL.md + MANIFEST.json + INSTALL.md</td><td>完整分发 / 迁移到另一台机器</td></tr>
+    <tr><td><code>session-index-skill-v3.2.0.zip</code></td><td>根 <code>SKILL.md</code> + README + MANIFEST（3 文件）</td><td>直接导入 DSH「MCP 与技能」→ Skills</td></tr>
   </table>
   <div class="warn">打包器<b>自动排除</b>所有会话索引分片、<code>meta/cards/notes/vectors.json</code>、备份、临时文件与已有 zip，并用系统解压工具验证过：包内 0 个敏感文件，可安全分发。接收方按标准流程 <code>pnpm add dsh-session-index-lau</code> 安装即可。</div>
 </section>
@@ -314,7 +314,7 @@ resources/read { "uri": "session-index://package" }</code></pre>
 </section>
 
 <section id="s9" data-kw="工具 参考 参数 14 个">
-  <h2>9. 17 个工具全参考</h2>
+  <h2>9. 18 个工具全参考</h2>
   <table>
     <tr><th>工具</th><th>作用</th><th>主要参数</th></tr>
     <tr><td><code>session_index_status</code></td><td>索引/记忆/检索模式/<b>自动维护与监听状态</b>/分发包</td><td>无</td></tr>
@@ -332,6 +332,7 @@ resources/read { "uri": "session-index://package" }</code></pre>
     <tr><td><code>session_index_todos</code></td><td><b>我还有什么没做完</b>：默认读<b>卡片里预抽的 <code>openItems</code></b>（0 解压）；排除「已完成」语气、跳过工具记录与代码块，按项目分组，带 <code>sessionId + seq</code></td><td><code>limit, perSession, maxItems, app, workspace, since, refresh（现读记录重算）</code></td></tr>
     <tr><td><code>session_index_resume</code></td><td><b>接续包</b>：给会话 id 或主题，产出一段可直接粘进新会话的上下文（目标 / 结论 / 未完成 / 涉及路径 / 关键词 / 相关记忆）</td><td><code>sessionId, query, app, workspace, limit, maxChars, stage（一键投待入库）, title, notebook, hpath, note</code></td></tr>
     <tr><td><code>session_index_doctor</code></td><td><b>索引体检</b>：meta / 分片 / 卡片一致性、孤儿分片、空分片、临时残留、备份堆积、体积、自动维护状态</td><td><code>fix（只清 1 小时前的临时/孤儿与多余备份）</code></td></tr>
+    <tr><td><code>session_index_skills</code></td><td><b>技能文件检索</b>：查看有哪些 skill（多个技能根<b>合并成一份清单</b>）、在技能文件里检索、从目录/zip 导入</td><td><code>action: roots/list/search/import/catalog, query, source, targetRoot, name, overwrite, limit</code></td></tr>
     <tr><td><code>session_index_refresh</code></td><td><b>手动</b>立即刷新；日常由事件+轮询自动维护</td><td><code>force</code></td></tr>
     <tr><td><code>session_index_stage</code></td><td><b>会话整理 → 思源桥待入库</b>；两步确认、只入队不写库</td><td><code>status, query, sessionIds, app, template, title, hpath, notebook, note, confirmToken</code></td></tr>
   </table>
@@ -544,13 +545,13 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
   <h2>14. 目录结构与验证记录</h2>
 <pre><button class="copy">复制</button><code>DSH/                        ← 仓库根 = 插件根（标准流程：sync-publish → npm publish → pnpm update）
 ├── pack.mjs                打包 CLI
-├── server.mjs              MCP 服务：17 工具 + 4 prompts + resources + 通知
+├── server.mjs              MCP 服务：18 工具 + 4 prompts + resources + 通知
 ├── cordis.patch.yml        bundle 层：挂宿主行 + MCP 行（!!js 自解析命令与路径）
 ├── build-index.mjs         多源增量构建器（--quiet 静止期）
 ├── smoke.mjs               93 项端到端自测
 ├── icon.svg                插件页图标（卡片 + 放大镜，64×64 SVG，938 字节）
 ├── plugin.json             机器可读插件能力清单（含安装方式与仓库信息）
-├── package.json            v3.1.1 / icon / dsh.bundle.patch / dsh.plugin / 脚本
+├── package.json            v3.2.0 / icon / dsh.bundle.patch / dsh.plugin / 脚本
 ├── 操作使用手册.html       本文档
 ├── README.md               仓库首页 = 安装与使用说明
 ├── skill/SKILL.md          自动接入技能
@@ -610,7 +611,7 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
     <li><b>v2.6.0</b> 新增<b>「会话检索」面板</b>（侧栏入口 + main 面板）：搜索框 + 会话卡列表（DSH 蓝 / WorkBuddy 黄左色条）+ 右侧详情（结论 · 提问 · 涉及路径 · 关键词 · 文件 · 工具）。数据走宿主半身注册的 <code>session-index</code> 斜杠命令；浏览器半身不碰文件系统。新增 <code>test-panel.mjs</code>。</li>
     <li><b>v2.7.0</b> <b>面板改为「配合 MCP 用」</b>：MCP 服务进程新增<b>本地只读 HTTP</b>（<code>lib/http-api.mjs</code>，<code>127.0.0.1:8799</code> 起、占用顺延到 8808），面板<b>优先直连它取数</b>——不再需要会话 id、不再依赖宿主半身那一行；命令通道降为兜底。新增 <code>lib/panel-api.mjs</code> 作为面板 / 斜杠命令 / HTTP <b>三条出口共用的唯一查询实现</b>（排序与 <code>session_index_brief</code> 同源），删掉宿主半身里那套朴素打分。宿主半身补 <code>host-half.log</code> 自诊断；面板 meta 行显示当前数据通道。<code>test-panel</code> 68 → 91、<code>smoke</code> 86 → 93。</li>
   </ul>
-  <h3>v3.1.1 跨终端同步</h3>
+  <h3>v3.2.0 跨终端同步</h3>
   <p>面板 meta 行右侧的「同步」按钮打开同步模块：填一个 <b>GitHub Private 仓地址</b>（建议
   <code>git@github.com:你/dsh-session-index-data.git</code>）→ 保存 → <b>上传到远端</b>；
   另一台机器装好插件、填同一地址 → <b>从远端合并</b>。配置过之后，面板每次打开都会看一眼远端，
@@ -640,10 +641,10 @@ pnpm install --offline --frozen-lockfile --config.autoInstallPeers=false</code><
       <code>GIT_TERMINAL_PROMPT=0</code> + <code>BatchMode=yes</code>，需要交互就报错，绝不挂起 MCP 进程。</li>
   </ul>
   <p class="note">数据仓必须是 <b>Private</b>：会话卡里有结论与路径，等同会话内容摘要。
-  功能（插件、技能、面板、17 个工具）随插件安装走，<b>不需要同步</b>。</p>
+  功能（插件、技能、面板、18 个工具）随插件安装走，<b>不需要同步</b>。</p>
 </section>
 
-<footer>dsh-session-index v3.1.1 · 操作使用手册 · 生成于 2026-11-18 · 零第三方依赖</footer>
+<footer>dsh-session-index v3.2.0 · 操作使用手册 · 生成于 2026-11-18 · 零第三方依赖</footer>
 </main>
 </div>
 <script>

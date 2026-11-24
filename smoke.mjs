@@ -143,7 +143,8 @@ try {
 
   const listed = await request('tools/list');
   const names = (listed.result?.tools || []).map((t) => t.name);
-  check('tools/list 返回 17 个工具', names.length === 17 && names.includes('session_index_stage')
+  check('tools/list 返回 18 个工具', names.length === 18 && names.includes('session_index_stage')
+    && names.includes('session_index_skills')
     && names.includes('session_index_todos') && names.includes('session_index_resume') && names.includes('session_index_doctor'), `${names.length} 个`);
   check('ping', (await request('ping')).result !== undefined);
 
@@ -274,7 +275,7 @@ try {
     check(`resources/read ${uri.split('//')[1]}`, (r.result?.contents?.[0]?.text || '').length > 10);
   }
   const pluginJson = JSON.parse((await request('resources/read', { uri: 'session-index://plugin.json' })).result.contents[0].text);
-  check('插件清单机器可读', pluginJson.mcp?.toolCount === 17 && pluginJson.automatic?.watchNewSessions === true, `v${pluginJson.version}`);
+  check('插件清单机器可读', pluginJson.mcp?.toolCount === 18 && pluginJson.automatic?.watchNewSessions === true, `v${pluginJson.version}`);
   const cardUri = await request('resources/read', { uri: `session-index://card/${withRecords.id.slice(0, 12)}` });
   check('resources/read 单会话卡模板', (cardUri.result?.contents?.[0]?.text || '').includes('"id"'));
 
@@ -328,6 +329,20 @@ try {
   check('doctor 给出健康判定与计数',
     typeof doctorRes.healthy === 'boolean' && doctorRes.counts && typeof doctorRes.counts.cards === 'number',
     `healthy=${doctorRes.healthy} cards=${doctorRes.counts?.cards}`);
+
+  // ---- v3.2：技能文件检索
+  const skillsList = await payload(await call('session_index_skills', { action: 'list' }));
+  check('skills list 返回合并后的技能清单',
+    skillsList.ok === true && Array.isArray(skillsList.skills) && Array.isArray(skillsList.roots),
+    `${skillsList.total} 个技能 / ${skillsList.duplicates} 个同名多根`);
+  const skillsRoots = await payload(await call('session_index_skills', { action: 'roots' }));
+  check('skills roots 列出所有技能根',
+    skillsRoots.ok === true && skillsRoots.roots.length >= 1 && skillsRoots.roots.some((r) => r.id === 'dsh:user'),
+    `${skillsRoots.roots?.length} 个根`);
+  const skillsSearch = await payload(await call('session_index_skills', { action: 'search', query: '会话', limit: 5 }));
+  check('skills search 能在技能文件里检索',
+    skillsSearch.ok === true && Array.isArray(skillsSearch.hits),
+    `${skillsSearch.total} 条命中`);
   check('通知通道可用（声明级）', Array.isArray(notifications), `收到 ${notifications.length} 条通知`);
 } catch (err) {
   check('冒烟流程', false, err.message);

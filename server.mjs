@@ -24,6 +24,7 @@ import { isSystemInjected } from './lib/extract.mjs';
 import { relatedTo, matchQuery, threadOf } from './lib/cards.mjs';
 import { projectOf, groupByProject, matches as matchesWorkspace } from './lib/workspace.mjs';
 import { extractOpenItems } from './lib/todos.mjs';
+import { listSkills, searchSkills, importSkill, writeCatalog, readCatalog } from './lib/skills.mjs';
 import { loadNotes, saveNotes, addNote, queryNotes, removeNote, noteChunks, notesStats } from './lib/notes.mjs';
 import { expandQuery, matchesQuery, rankCandidates, rrfMerge, makeSnippet } from './lib/semantic.mjs';
 import { embeddingConfig, syncVectors, vectorRank, cardChunks, vectorStats } from './lib/embedding.mjs';
@@ -31,7 +32,7 @@ import { pack, packAll, listPacks } from './lib/pack.mjs';
 import { stageConfig, buildStageDocument, stageToken, bridgeOverview, findDuplicate, postStage, StageError } from './lib/stage.mjs';
 
 const { sessionsRoot, indexDir, workbuddyProjectsDir } = defaultPaths();
-const VERSION = '3.1.1';
+const VERSION = '3.2.0';
 const SUPPORTED_PROTOCOLS = new Set(['2024-11-05', '2025-03-26', '2025-06-18']);
 const log = (...parts) => process.stderr.write(`[dsh-session-index] ${parts.join(' ')}\n`);
 
@@ -1126,6 +1127,96 @@ function toolDoctor(args = {}) {
   };
 }
 
+/**
+ * 技能文件检索 —— 「这台机器上有哪些 skill / 某个技能里写了什么 / 缺了怎么导入」。
+ *
+ * action:
+ *   - `roots`   列出所有技能根（用户根 + 项目根 + 环境变量追加）与各自的技能数
+ *   - `list`    列出**合并后**的全部技能（同名多根合并成一条，标出出现在哪几个根）
+ *   - `search`  在技能文件（SKILL.md + references/*.md）里做文件级检索
+ *   - `import`  从目录或 zip 导入技能到 DSH 技能根（同名默认不覆盖）
+ *   - `catalog` 把合并后的清单写到索引目录 skills.json（面板与跨终端共用）
+ */
+async function toolSkills(args = {}) {
+  const action = String(args.action || 'list').trim();
+  const roots = listSkills().roots;
+
+  if (action === 'roots') {
+    return {
+      ok: true, action,
+      roots: roots.map((r) => ({
+        ...r,
+        count: listSkills({ roots: [r] }).total,
+      })),
+      hint: '同一个技能可能同时存在于多个根（软链或各工具各装一份），list 会把它们合并成一条',
+    };
+  }
+
+  if (action === 'search') {
+    const query = String(args.query || '').trim();
+    if (!query) fail('search 要带 query');
+    const payload = searchSkills({ query, limit: clamp(args.limit, 1, 100, 20) });
+    return {
+      ...payload,
+      action,
+      hint: payload.hits.length
+        ? '命中带文件与行号；要整份内容直接读该文件（path 字段给了绝对路径）'
+        : '没命中。换个关键词，或先 list 看有哪些技能',
+    };
+  }
+
+  if (action === 'import') {
+    const source = String(args.source || '').trim();
+    if (!source) fail('import 要带 source（目录或 .zip 的路径）');
+    const result = await importSkill({
+      source,
+      targetRoot: args.targetRoot,
+      name: args.name,
+      overwrite: Boolean(args.overwrite),
+    });
+    if (!result.ok) {
+      return {
+        ok: false, action, error: result.error, hint: result.hint, existing: result.existing,
+      };
+    }
+    // 导入后刷新清单
+    try { writeCatalog(indexDir); } catch { /* 清单写不了不影响导入 */ }
+    return { ...result, action };
+  }
+
+  if (action === 'catalog') {
+    const result = writeCatalog(indexDir);
+    return { ...result, action, hint: '清单已写入索引目录（skills.json），面板与跨终端都能看到' };
+  }
+
+  // 默认：list
+  const catalog = listSkills({ query: args.query });
+  const items = catalog.skills.map((s) => ({
+    name: s.name,
+    description: s.description,
+    version: s.version || undefined,
+    whenToUse: s.whenToUse || undefined,
+    roots: s.roots,
+    primaryRoot: s.primaryRoot,
+    primaryPath: s.primaryPath,
+    fileCount: s.fileCount,
+    bytes: s.bytes,
+    duplicates: s.duplicates,
+    updatedAt: s.updatedAt,
+    files: s.files.slice(0, 20),
+  }));
+  return {
+    ok: true, action: 'list',
+    total: catalog.total,
+    duplicates: catalog.duplicates,
+    roots: catalog.roots,
+    skills: items,
+    hint: catalog.duplicates
+      ? `${catalog.duplicates} 个技能在多个根里各有一份（已合并；roots 字段列出全部来源）`
+      : '用 action:"search" 在技能文件里检索，用 action:"import" 导入新技能',
+  };
+}
+
 async function toolStage(args = {}) {
   const cfg = stageConfig();
   if (!cfg.enabled) {
@@ -1274,6 +1365,7 @@ const HANDLERS = {
   session_index_todos: toolTodos,
   session_index_resume: toolResume,
   session_index_doctor: toolDoctor,
+  session_index_skills: toolSkills,
   session_index_stage: toolStage,
 };
 
@@ -1336,6 +1428,7 @@ const TOOLS = [
   { name: 'session_index_todos', description: '【跨会话未完成事项】扫最近的会话记录，抽出 TODO / 待办 / 下一步 / 还没做 / 待验证 这类没做完的事（排除「已完成」语气），按项目分组并附会话与 seq。回答「我还有什么没做完」。', inputSchema: { type: 'object', properties: { limit: { type: 'number', description: '扫多少个最近会话，默认 20' }, perSession: { type: 'number', description: '每个会话最多取几条，默认 4' }, maxItems: { type: 'number', description: '总计上限，默认 40' }, app: { type: 'string' }, workspace: { type: 'string' }, since: { type: 'number' }, refresh: { type: 'boolean', description: '现读会话分片重算（默认读卡片里预抽好的）' } }, additionalProperties: false } },
   { name: 'session_index_resume', description: '【接续包】给会话 id 或主题，产出一段可直接粘进新会话的上下文（目标 / 已有结论 / 未完成 / 涉及路径 / 关键词 / 相关记忆）。传 stage:true 可一并投递到思源桥「待入库」。', inputSchema: { type: 'object', properties: { sessionId: { type: 'string', description: '会话 id，支持前缀' }, query: { type: 'string', description: '按主题挑最相关的 1~3 个会话' }, app: { type: 'string' }, workspace: { type: 'string' }, limit: { type: 'number' }, maxChars: { type: 'number' }, stage: { type: 'boolean', description: '投递到思源桥待入库（只入队，写入仍由人在界面确认）' }, title: { type: 'string' }, notebook: { type: 'string' }, hpath: { type: 'string' }, note: { type: 'string' } }, additionalProperties: false } },
   { name: 'session_index_doctor', description: '【索引体检】检查 meta / 分片 / 卡片三者一致性、孤儿分片、空分片、临时残留、备份堆积、体积与自动维护状态。fix=true 只清确定安全的东西（1 小时前的临时文件与孤儿分片、只留最近 5 份 notes 备份）。', inputSchema: { type: 'object', properties: { fix: { type: 'boolean' } }, additionalProperties: false } },
+  { name: 'session_index_skills', description: '【技能文件检索】查看这台机器上有哪些 skill（多个技能根会**合并成一份清单**，同名只留一条并标出所有来源根）、在技能文件（SKILL.md + references/*.md）里做文件级检索、从目录或 zip 导入技能到 DSH 技能根，并把合并后的清单写进索引目录 skills.json。action: roots/list/search/import/catalog。', inputSchema: { type: 'object', properties: { action: { type: 'string', description: 'roots / list（默认）/ search / import / catalog' }, query: { type: 'string' }, source: { type: 'string', description: 'import 用：目录或 .zip 路径' }, targetRoot: { type: 'string', description: 'import 用：目标技能根，默认 ~/.dsh/skills' }, name: { type: 'string', description: 'import 用：覆盖导入后的技能名' }, overwrite: { type: 'boolean', description: 'import 用：同名是否覆盖（默认否）' }, limit: { type: 'number' } }, additionalProperties: false } },
   { name: 'session_index_refresh', description: '手动立即刷新索引。注意：新会话已由文件事件自动识别，通常无需调用；仅改抽取规则或需即时生效时用。', inputSchema: { type: 'object', properties: { force: { type: 'boolean' } }, additionalProperties: false } },
   { name: 'session_index_stage', description: '【会话整理 → 思源桥待入库】把会话卡/结论/检索片段整理成 Markdown 文档。两步确认：不带 confirmToken 只返回预览与令牌，原样回传 confirmWith 才投递到思源桥 /api/stage；绝不自动写入思源笔记库。支持指定会话、主题、模板、落点与去重。status=true 只读探测服务与队列。', inputSchema: { type: 'object', properties: { status: { type: 'boolean', description: '只读：探测思源桥服务与待入库队列' }, query: { type: 'string', description: '主题词，按主题聚合会话' }, sessionIds: { type: 'array', items: { type: 'string' }, description: '指定会话 id（支持前缀），不传则按最近/主题取' }, app: { type: 'string', description: 'dsh / workbuddy / all' }, workspace: { type: 'string' }, since: { type: 'number' }, until: { type: 'number' }, template: { type: 'string', description: 'brief(默认) / decisions / detail' }, title: { type: 'string', description: '自定义文档标题；确认时请回传预览给出的 title' }, notebook: { type: 'string' }, hpath: { type: 'string', description: '目标目录，默认 /会话札记/思源' }, note: { type: 'string' }, limit: { type: 'number' }, maxChars: { type: 'number' }, confirmToken: { type: 'string', description: '预览返回的令牌；带上且匹配才真正投递' } }, additionalProperties: false } },
 ];

@@ -1,5 +1,5 @@
 /**
- * 会话检索面板（dsh-session-index v3.1.1）单测。
+ * 会话检索面板（dsh-session-index v3.2.0）单测。
  *
  * 两半各测：
  *   1. 宿主半身 `lib/index.mjs`：路径记录仍在 + 新增的 `session-index` 命令
@@ -381,6 +381,17 @@ const { runQuery: sharedQuery } = await import(pathToFileURL(path.join(ROOT, 'li
     Array.isArray(todosRes.body.items) && Array.isArray(todosRes.body.byProject));
   check('http: /api/todos 支持项目过滤',
     handleRequest(INDEX_DIR, u('/api/todos?workspace=dsh')).body.ok === true);
+
+  // 技能：查看有哪些 / 检索技能文件（读本机技能根，不进索引目录）
+  const sk = handleRequest(INDEX_DIR, u('/api/skills'));
+  check('http: /api/skills 返回合并后的技能清单',
+    sk.code === 200 && sk.body.ok === true && Array.isArray(sk.body.skills),
+    `${sk.body.total} 个技能 / ${sk.body.roots?.length} 个根`);
+  check('http: /api/skills 标出同名多根', typeof sk.body.duplicates === 'number');
+  const skHit = handleRequest(INDEX_DIR, u('/api/skills/search?q=' + encodeURIComponent('会话')));
+  check('http: /api/skills/search 能检索技能文件',
+    skHit.code === 200 && skHit.body.ok === true && Array.isArray(skHit.body.hits),
+    `${skHit.body.total} 条命中`);
   check('http: 未知路由给 404', handleRequest(INDEX_DIR, u('/nope')).code === 404);
 
   // 跨源策略：会话卡是会话元数据，公网站点与局域网默认都不许读；
