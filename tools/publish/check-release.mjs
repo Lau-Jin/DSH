@@ -97,13 +97,14 @@ const CFG = {
     syntaxFiles: [
       'lib/index.js', 'lib/client.js', 'setup.mjs', 'smoke.mjs',
       'service/server.mjs', 'service/bridge-cli.mjs', 'service/save-doc.mjs',
-      'service/html-repair.mjs', 'service/plugin/index.js', 'service/public/app.js',
+      'service/html-repair.mjs', 'service/lib/markdown.mjs', 'service/plugin/index.js', 'service/public/app.js',
       'tools/verify-lifecycle.mjs', 'tools/audit-render.mjs', 'tools/inspect-doc.mjs',
       'tools/fix-sql-blocks.mjs', 'tools/import-manual.mjs', 'tools/import-win-doc.mjs',
     ],
     smokeRe: /(\d+)\/\1 通过 · 全部通过/,
     runtimeFiles: [
-      'lib/index.js', 'lib/client.js', 'service/server.mjs', 'service/public/index.html',
+      'lib/index.js', 'lib/client.js', 'service/server.mjs', 'service/lib/markdown.mjs',
+      'service/public/index.html',
       'service/public/app.js', 'cordis.patch.yml', 'icon.svg', 'setup.mjs', 'smoke.mjs',
     ],
   },
@@ -210,6 +211,19 @@ if (!POST) {
   let regVer = '';
   try { regVer = run('npm', ['view', c.npmName, 'version', '--prefer-online']).trim(); } catch { /* ignore */ }
   check('registry 上该版本尚未发布', regVer !== srcVer, `registry ${regVer} / 本次 ${srcVer}`);
+  check('版本跳幅符合语义化规则', (() => {
+    // 规则：一次发布只在一位上 +1 —— 小改动 PATCH、大改动 MINOR、不兼容 MAJOR；
+    // 其余位必须不动、且新版本严格大于上一个已发布版本。连跳/降版/重复一律不放行。
+    if (!regVer) return true;                       // registry 读不到时不误判
+    const a = regVer.split('.').map(Number);
+    const b = srcVer.split('.').map(Number);
+    if (a.length !== 3 || b.length !== 3 || [...a, ...b].some((x) => !Number.isFinite(x))) return false;
+    const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const isMajor = d[0] === 1 && d[1] === -a[1] && d[2] === -a[2];
+    const isMinor = d[0] === 0 && d[1] === 1 && d[2] === -a[2];
+    const isPatch = d[0] === 0 && d[1] === 0 && d[2] === 1;
+    return isMajor || isMinor || isPatch;
+  })(), `上一个 ${regVer || '(未知)'} → 本次 ${srcVer}（只允许 +0.0.1 / +0.1.0 / +1.0.0）`);
 }
 
 // ---------------------------------------------------------------- POST
